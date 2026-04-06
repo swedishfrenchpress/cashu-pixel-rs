@@ -1,0 +1,21 @@
+FROM --platform=linux/arm64 rust:1.94-bookworm AS builder
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libfontconfig1-dev \
+    libudev-dev \
+    libinput-dev \
+    libgbm-dev \
+    libxkbcommon-dev \
+    libseat-dev \
+    libssl-dev \
+    libsqlite3-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+
+RUN cargo build --release
+
+RUN ls -lh target/release/cashu-pixel

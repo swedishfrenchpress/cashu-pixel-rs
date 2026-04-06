@@ -1,0 +1,23 @@
+[package]
+name = "cashu-pixel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cdk = { version = "0.15", features = ["wallet"] }
+cdk-sqlite = { version = "0.15", features = ["wallet"] }
+slint = { version = "1.6", features = ["backend-linuxkms", "renderer-software"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+qrcode = "0.14"
+image = { version = "0.25", default-features = false, features = ["png"] }
+rand = "0.8"
+dirs = "5"
+
+[build-dependencies]
+slint-build = "1.6"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
