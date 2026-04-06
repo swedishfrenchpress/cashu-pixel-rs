@@ -1,160 +1,241 @@
-// NERV // CASHU PIXEL — Evangelion-inspired ecash terminal
+// ═══════════════════════════════════════════════
+// NERV // CASHU PIXEL — Terminal Interface v0.2
+// ═══════════════════════════════════════════════
 
+// ─── NERV BUTTON ───
 component NervButton inherits Rectangle {
     in property <string> label;
     in property <color> accent: #FF9900;
     callback clicked();
-    height: 64px;
+    height: 60px;
     background: #000000;
     border-width: 1px;
     border-color: accent.with-alpha(0.6);
 
-    Rectangle {
-        x: 0; y: 0;
-        width: 3px;
-        height: parent.height;
-        background: accent.with-alpha(0.2);
-    }
-    Rectangle {
-        x: 8px; y: 0;
-        width: parent.width - 16px;
-        height: 1px;
-        background: accent.with-alpha(0.24);
-    }
-    Rectangle {
-        x: 8px;
-        y: parent.height - 1px;
-        width: parent.width - 16px;
-        height: 1px;
-        background: accent.with-alpha(0.16);
+    // Left accent bar
+    Rectangle { x: 0; y: 0; width: 3px; height: parent.height; background: accent.with-alpha(0.18); }
+    // Top line
+    Rectangle { x: 6px; y: 0; width: parent.width - 12px; height: 1px; background: accent.with-alpha(0.22); }
+    // Bottom line
+    Rectangle { x: 6px; y: parent.height - 1px; width: parent.width - 12px; height: 1px; background: accent.with-alpha(0.14); }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 8px;
+        // Small square icon
+        Rectangle {
+            width: 6px; height: 6px;
+            border-width: 1px;
+            border-color: accent.with-alpha(0.55);
+        }
+        Text {
+            text: label;
+            font-size: 14px;
+            font-weight: 700;
+            color: accent;
+            vertical-alignment: center;
+        }
     }
 
-    Text {
-        text: label;
-        font-size: 16px;
-        font-weight: 700;
-        color: accent;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-
-    TouchArea {
-        clicked => { root.clicked(); }
-    }
+    TouchArea { clicked => { root.clicked(); } }
 }
 
+// ─── AMOUNT BUTTON ───
 component NervAmountBtn inherits Rectangle {
     in property <string> label;
     in property <bool> selected: false;
     callback clicked();
-    height: 72px;
-    background: selected ? #FF9900.with-alpha(0.1) : #000000;
+    height: 64px;
+    background: selected ? #FF9900.with-alpha(0.08) : #000000;
     border-width: 1px;
-    border-color: selected ? #FF9900.with-alpha(0.7) : #FF9900.with-alpha(0.3);
+    border-color: selected ? #FF9900.with-alpha(0.7) : #FF9900.with-alpha(0.25);
+
+    // Corner accents (4 corners)
+    Rectangle { x: 0; y: 0; width: 4px; height: 1px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: 0; y: 0; width: 1px; height: 4px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: parent.width - 4px; y: 0; width: 4px; height: 1px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: parent.width - 1px; y: 0; width: 1px; height: 4px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: 0; y: parent.height - 1px; width: 4px; height: 1px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: 0; y: parent.height - 4px; width: 1px; height: 4px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: parent.width - 4px; y: parent.height - 1px; width: 4px; height: 1px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
+    Rectangle { x: parent.width - 1px; y: parent.height - 4px; width: 1px; height: 4px; background: selected ? #FF9900 : #FF9900.with-alpha(0.4); }
 
     Text {
         text: label;
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 700;
-        color: selected ? #FF9900 : #FF9900.with-alpha(0.8);
+        color: selected ? #FF9900 : #FF9900.with-alpha(0.75);
         horizontal-alignment: center;
         vertical-alignment: center;
     }
-
-    TouchArea {
-        clicked => { root.clicked(); }
-    }
+    TouchArea { clicked => { root.clicked(); } }
 }
 
+// ─── HEADER BAR ───
 component NervHeader inherits Rectangle {
     in property <string> title;
     in property <string> subtitle: "";
+    in property <color> accent: #FF9900;
     in property <bool> show-back: false;
     callback back();
-    height: 52px;
-    background: #000000;
+    height: 48px;
+    background: #0A0A0A;
 
     HorizontalLayout {
-        padding-left: 0;
         spacing: 0;
-
-        Rectangle { width: 4px; background: #FF9900; }
-        Rectangle { width: 12px; }
+        Rectangle { width: 4px; background: accent; }
+        Rectangle { width: 10px; }
 
         if show-back: Rectangle {
-            width: 60px;
+            width: 52px;
+            height: 48px;
             TouchArea { clicked => { root.back(); } }
-            Text {
-                text: "◄";
-                font-size: 18px;
-                color: #FF9900.with-alpha(0.6);
-                vertical-alignment: center;
-            }
+            Text { text: "◄"; font-size: 20px; color: accent.with-alpha(0.6); vertical-alignment: center; horizontal-alignment: center; }
         }
 
-        Text {
-            text: title;
-            font-size: 18px;
-            font-weight: 700;
-            color: #FF9900;
-            vertical-alignment: center;
-        }
-
+        Text { text: title; font-size: 15px; font-weight: 700; color: accent; vertical-alignment: center; }
         Rectangle {}
-
-        if subtitle != "": Text {
-            text: subtitle;
-            font-size: 11px;
-            color: #555555;
-            vertical-alignment: center;
-            horizontal-alignment: right;
-        }
-
-        Rectangle { width: 16px; }
+        if subtitle != "": Text { text: subtitle; font-size: 12px; color: #555555; vertical-alignment: center; horizontal-alignment: right; }
+        Rectangle { width: 12px; }
     }
 
-    Rectangle {
-        y: parent.height - 1px;
-        width: parent.width;
-        height: 1px;
-        background: #FF9900.with-alpha(0.28);
-    }
+    // Bottom border
+    Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: accent.with-alpha(0.28); }
 }
 
-component NervDivider inherits Rectangle {
-    height: 1px;
-    background: #FF9900.with-alpha(0.14);
-}
-
-component NervStatusBar inherits Rectangle {
-    in property <string> status;
-    height: 36px;
-    background: #000000;
-
-    Rectangle {
-        y: 0;
-        width: parent.width;
-        height: 1px;
-        background: #FF9900.with-alpha(0.14);
-    }
+// ─── SECTION LABEL ───
+component NervSectionLabel inherits Rectangle {
+    in property <string> label;
+    in property <color> accent: #FF9900;
+    height: 28px;
+    background: transparent;
 
     HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
+        spacing: 6px;
+        alignment: center;
 
-        Rectangle { width: 3px; background: #FF9900.with-alpha(0.3); }
-        Rectangle { width: 8px; }
+        Rectangle { width: 20px; height: 1px; background: accent.with-alpha(0.3); }
+        Rectangle { width: 4px; height: 4px; background: accent.with-alpha(0.5); }
+        Text { text: label; font-size: 12px; font-weight: 700; color: accent.with-alpha(0.7); vertical-alignment: center; }
+        Rectangle { width: 4px; height: 4px; background: accent.with-alpha(0.5); }
+        Rectangle { width: 20px; height: 1px; background: accent.with-alpha(0.3); }
+    }
+}
+
+// ─── DIVIDER ───
+component NervDivider inherits Rectangle {
+    in property <color> accent: #FF9900;
+    height: 1px;
+    background: accent.with-alpha(0.14);
+}
+
+// ─── STATUS BAR ───
+component NervStatusBar inherits Rectangle {
+    in property <string> status;
+    in property <color> accent: #FF9900;
+    height: 32px;
+    background: #0A0A0A;
+
+    Rectangle { y: 0; width: parent.width; height: 1px; background: accent.with-alpha(0.14); }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        spacing: 6px;
+
+        Rectangle { width: 3px; background: accent.with-alpha(0.3); }
+
+        // Pulsing dot
+        Rectangle {
+            width: 5px; height: 5px;
+            background: accent;
+            property <float> pulse-opacity: 1.0;
+            opacity: self.pulse-opacity;
+            animate pulse-opacity { duration: 1200ms; }
+        }
 
         Text {
             text: status == "" ? "SYSTEM READY" : status;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
-            color: status == "" ? #555555 : #FF9900.with-alpha(0.8);
+            color: status == "" ? #555555 : accent.with-alpha(0.85);
             vertical-alignment: center;
         }
     }
 }
 
+// ─── SCANNING BANNER ───
+component NervScanBanner inherits Rectangle {
+    in property <bool> active: true;
+    height: 44px;
+    background: #0A0A0A;
+    border-width: 1px;
+    border-color: active ? #00F6FF.with-alpha(0.4) : #555555.with-alpha(0.2);
+
+    // Hazard stripe simulation — alternating colored bars
+    Rectangle { x: 0; y: 0; width: 6px; height: parent.height; background: active ? #00F6FF.with-alpha(0.15) : #333333.with-alpha(0.1); }
+    Rectangle { x: 12px; y: 0; width: 3px; height: parent.height; background: active ? #00F6FF.with-alpha(0.08) : transparent; }
+    Rectangle { x: parent.width - 6px; y: 0; width: 6px; height: parent.height; background: active ? #00F6FF.with-alpha(0.15) : #333333.with-alpha(0.1); }
+    Rectangle { x: parent.width - 15px; y: 0; width: 3px; height: parent.height; background: active ? #00F6FF.with-alpha(0.08) : transparent; }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 8px;
+
+        // Blinking indicator
+        Rectangle {
+            width: 8px; height: 8px;
+            background: active ? #00F6FF : #555555;
+            opacity: active ? 1.0 : 0.3;
+        }
+
+        Text {
+            text: active ? "SCANNING FOR BLUETOOTH" : "BLE INACTIVE";
+            font-size: 12px;
+            font-weight: 700;
+            color: active ? #00F6FF : #555555;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: 8px; height: 8px;
+            background: active ? #00F6FF : #555555;
+            opacity: active ? 1.0 : 0.3;
+        }
+    }
+}
+
+// ─── SCANLINE OVERLAY (CRT EFFECT) ───
+component ScanlineOverlay inherits Rectangle {
+    // 12 horizontal scanlines across 720px
+    for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]: Rectangle {
+        x: 0;
+        y: i * 60px;
+        width: parent.width;
+        height: 1px;
+        background: #FF9900.with-alpha(0.06);
+    }
+}
+
+// ─── CORNER CROSSHAIRS ───
+component CornerCrosshairs inherits Rectangle {
+    property <length> inset: 50px;
+    property <color> c: #FF9900.with-alpha(0.22);
+
+    // Top-left
+    Rectangle { x: inset; y: inset; width: 24px; height: 1px; background: c; }
+    Rectangle { x: inset; y: inset; width: 1px; height: 24px; background: c; }
+    // Top-right
+    Rectangle { x: parent.width - inset - 24px; y: inset; width: 24px; height: 1px; background: c; }
+    Rectangle { x: parent.width - inset - 1px; y: inset; width: 1px; height: 24px; background: c; }
+    // Bottom-left
+    Rectangle { x: inset; y: parent.height - inset - 1px; width: 24px; height: 1px; background: c; }
+    Rectangle { x: inset; y: parent.height - inset - 24px; width: 1px; height: 24px; background: c; }
+    // Bottom-right
+    Rectangle { x: parent.width - inset - 24px; y: parent.height - inset - 1px; width: 24px; height: 1px; background: c; }
+    Rectangle { x: parent.width - inset - 1px; y: parent.height - inset - 24px; width: 1px; height: 24px; background: c; }
+}
+
+// ─── GLOBAL STATE ───
 export global WalletState {
     in-out property <string> balance: "0";
     in-out property <string> mint-url: "CONNECTING...";
@@ -164,13 +245,15 @@ export global WalletState {
     in-out property <bool> qr-ready: false;
     in-out property <bool> show-check-payment: false;
     in-out property <int> current-screen: 0;
+    // 0=home, 1=receive(mint+ble), 2=send, 4=qr, 5=settings
 
     callback request-mint-quote(int);
     callback check-mint-payment();
     callback request-send(int);
-    callback receive-ble();
+    callback start-receive();
 }
 
+// ─── MAIN ───
 export component MainApp inherits Window {
     width: 720px;
     height: 720px;
@@ -182,53 +265,74 @@ export component MainApp inherits Window {
     if WalletState.current-screen == 0: VerticalLayout {
         spacing: 0;
 
-        NervHeader {
-            title: "NERV // CASHU TERMINAL";
-            subtitle: "V0.1.0";
-        }
+        NervHeader { title: "NERV // CASHU TERMINAL"; subtitle: "V0.2.0"; }
 
-        VerticalLayout {
-            padding: 24px;
-            spacing: 4px;
-            height: 180px;
+        // Balance card
+        Rectangle {
+            height: 170px;
+            background: #000000;
 
-            Rectangle { height: 20px; }
+            // Card border
+            Rectangle {
+                x: 16px; y: 8px;
+                width: parent.width - 32px;
+                height: parent.height - 16px;
+                border-width: 1px;
+                border-color: #00FF00.with-alpha(0.14);
+                background: #000000;
 
-            Text {
-                text: "B A L A N C E";
-                font-size: 12px;
-                font-weight: 700;
-                color: #FF9900;
-                horizontal-alignment: center;
-            }
-            Text {
-                text: WalletState.balance + "  SAT";
-                font-size: 52px;
-                font-weight: 700;
-                color: #00FF00;
-                horizontal-alignment: center;
-            }
-            Text {
-                text: "MINT: " + WalletState.mint-url;
-                font-size: 11px;
-                color: #555555;
-                horizontal-alignment: center;
+                // Inner glow border
+                Rectangle {
+                    x: 1px; y: 1px;
+                    width: parent.width - 2px; height: parent.height - 2px;
+                    border-width: 1px;
+                    border-color: #00FF00.with-alpha(0.06);
+                }
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 2px;
+                    alignment: center;
+
+                    Text {
+                        text: "B A L A N C E";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #FF9900;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: WalletState.balance + "  SAT";
+                        font-size: 48px;
+                        font-weight: 700;
+                        color: #00FF00;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "MINT: " + WalletState.mint-url;
+                        font-size: 12px;
+                        color: #555555;
+                        horizontal-alignment: center;
+                    }
+                }
             }
         }
 
         NervDivider {}
 
+        // Buttons
         VerticalLayout {
-            padding: 20px;
-            spacing: 12px;
+            padding: 16px;
+            spacing: 10px;
 
             HorizontalLayout {
-                spacing: 12px;
-                height: 72px;
+                spacing: 10px;
+                height: 68px;
 
                 NervButton {
                     label: "S E N D";
                     accent: #FF2B1D;
+                    height: 68px;
                     clicked => {
                         WalletState.current-screen = 2;
                         WalletState.selected-amount = 0;
@@ -238,59 +342,71 @@ export component MainApp inherits Window {
                 NervButton {
                     label: "R E C E I V E";
                     accent: #00FF00;
+                    height: 68px;
                     clicked => {
-                        WalletState.current-screen = 3;
-                        WalletState.status = "";
+                        WalletState.current-screen = 1;
+                        WalletState.selected-amount = 0;
+                        WalletState.status = "SCANNING...";
+                        WalletState.start-receive();
                     }
-                }
-            }
-
-            NervButton {
-                label: "M I N T";
-                accent: #FFAA00;
-                clicked => {
-                    WalletState.current-screen = 1;
-                    WalletState.selected-amount = 0;
-                    WalletState.status = "";
                 }
             }
 
             NervButton {
                 label: "SETTINGS";
                 accent: #555555;
-                clicked => { WalletState.current-screen = 5; }
+                height: 44px;
+                clicked => { WalletState.current-screen = 5; WalletState.status = ""; }
             }
         }
 
         Rectangle {}
-
         NervStatusBar { status: WalletState.status; }
     }
 
-    // ═══ MINT ═══
+    // ═══ RECEIVE (COMBINED MINT + BLE) ═══
     if WalletState.current-screen == 1: VerticalLayout {
         spacing: 0;
 
         NervHeader {
-            title: "MINT // DEPOSIT";
-            subtitle: "BOLT11";
+            title: "RECEIVE // INCOMING";
+            subtitle: "BLE + LN";
+            accent: #00FF00;
             show-back: true;
-            back => { WalletState.current-screen = 0; }
+            back => { WalletState.current-screen = 0; WalletState.status = ""; }
         }
 
+        // BLE Scanning Banner
         VerticalLayout {
-            padding: 20px;
-            spacing: 8px;
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: 8px;
+            padding-bottom: 4px;
 
+            NervScanBanner { active: true; }
+        }
+
+        NervDivider {}
+
+        // Mint section
+        VerticalLayout {
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: 4px;
+            spacing: 6px;
+
+            NervSectionLabel { label: "MINT VIA LIGHTNING"; accent: #FFAA00; }
+
+            // Amount display
             Rectangle {
-                height: 70px;
+                height: 56px;
                 background: #000000;
                 border-width: 1px;
-                border-color: #FFAA00.with-alpha(0.2);
+                border-color: #FFAA00.with-alpha(0.18);
 
                 Text {
                     text: WalletState.selected-amount == 0 ? "SELECT AMOUNT" : WalletState.selected-amount + "  SAT";
-                    font-size: WalletState.selected-amount == 0 ? 18px : 36px;
+                    font-size: WalletState.selected-amount == 0 ? 16px : 32px;
                     font-weight: 700;
                     color: WalletState.selected-amount == 0 ? #555555 : #00FF00;
                     horizontal-alignment: center;
@@ -298,10 +414,8 @@ export component MainApp inherits Window {
                 }
             }
 
-            Rectangle { height: 4px; }
-
             GridLayout {
-                spacing: 8px;
+                spacing: 6px;
                 Row {
                     NervAmountBtn { label: "21"; selected: WalletState.selected-amount == 21; clicked => { WalletState.selected-amount = 21; } }
                     NervAmountBtn { label: "100"; selected: WalletState.selected-amount == 100; clicked => { WalletState.selected-amount = 100; } }
@@ -314,12 +428,10 @@ export component MainApp inherits Window {
                 }
             }
 
-            Rectangle { height: 8px; }
-
             NervButton {
                 label: "CREATE LIGHTNING INVOICE";
                 accent: #FFAA00;
-                height: 72px;
+                height: 56px;
                 clicked => {
                     if WalletState.selected-amount > 0 {
                         WalletState.status = "GENERATING INVOICE...";
@@ -330,7 +442,7 @@ export component MainApp inherits Window {
         }
 
         Rectangle {}
-        NervStatusBar { status: WalletState.status; }
+        NervStatusBar { status: WalletState.status; accent: #00FF00; }
     }
 
     // ═══ SEND ═══
@@ -340,23 +452,26 @@ export component MainApp inherits Window {
         NervHeader {
             title: "SEND // TOKEN";
             subtitle: "OFFLINE";
+            accent: #FF2B1D;
             show-back: true;
-            back => { WalletState.current-screen = 0; }
+            back => { WalletState.current-screen = 0; WalletState.status = ""; }
         }
 
         VerticalLayout {
-            padding: 20px;
-            spacing: 8px;
+            padding: 16px;
+            spacing: 6px;
+
+            NervSectionLabel { label: "SELECT AMOUNT"; accent: #FF2B1D; }
 
             Rectangle {
-                height: 70px;
+                height: 60px;
                 background: #000000;
                 border-width: 1px;
-                border-color: #FF2B1D.with-alpha(0.2);
+                border-color: #FF2B1D.with-alpha(0.18);
 
                 Text {
                     text: WalletState.selected-amount == 0 ? "SELECT AMOUNT" : WalletState.selected-amount + "  SAT";
-                    font-size: WalletState.selected-amount == 0 ? 18px : 36px;
+                    font-size: WalletState.selected-amount == 0 ? 16px : 32px;
                     font-weight: 700;
                     color: WalletState.selected-amount == 0 ? #555555 : #00FF00;
                     horizontal-alignment: center;
@@ -364,10 +479,8 @@ export component MainApp inherits Window {
                 }
             }
 
-            Rectangle { height: 4px; }
-
             GridLayout {
-                spacing: 8px;
+                spacing: 6px;
                 Row {
                     NervAmountBtn { label: "10"; selected: WalletState.selected-amount == 10; clicked => { WalletState.selected-amount = 10; } }
                     NervAmountBtn { label: "21"; selected: WalletState.selected-amount == 21; clicked => { WalletState.selected-amount = 21; } }
@@ -380,12 +493,12 @@ export component MainApp inherits Window {
                 }
             }
 
-            Rectangle { height: 8px; }
+            Rectangle { height: 4px; }
 
             NervButton {
                 label: "SHOW QR CODE";
                 accent: #FF2B1D;
-                height: 72px;
+                height: 60px;
                 clicked => {
                     if WalletState.selected-amount > 0 {
                         WalletState.status = "GENERATING TOKEN...";
@@ -396,107 +509,72 @@ export component MainApp inherits Window {
         }
 
         Rectangle {}
-        NervStatusBar { status: WalletState.status; }
-    }
-
-    // ═══ RECEIVE ═══
-    if WalletState.current-screen == 3: VerticalLayout {
-        spacing: 0;
-
-        NervHeader {
-            title: "RECEIVE // INCOMING";
-            subtitle: "BLE";
-            show-back: true;
-            back => { WalletState.current-screen = 0; }
-        }
-
-        VerticalLayout {
-            padding: 24px;
-            spacing: 20px;
-
-            Rectangle { height: 40px; }
-
-            NervButton {
-                label: "RECEIVE VIA BLUETOOTH";
-                accent: #00F6FF;
-                height: 100px;
-                clicked => {
-                    WalletState.status = "SCANNING...";
-                    WalletState.receive-ble();
-                }
-            }
-
-            Rectangle { height: 20px; }
-
-            Text {
-                text: WalletState.status == "" ? "TAP TO START LISTENING" : WalletState.status;
-                font-size: 16px;
-                font-weight: 700;
-                color: #00FF00.with-alpha(0.7);
-                horizontal-alignment: center;
-            }
-        }
-
-        Rectangle {}
-        NervStatusBar { status: WalletState.status; }
+        NervStatusBar { status: WalletState.status; accent: #FF2B1D; }
     }
 
     // ═══ QR VIEW ═══
     if WalletState.current-screen == 4: VerticalLayout {
         spacing: 0;
-        padding: 0;
 
+        NervHeader {
+            title: "QR // DATA OUTPUT";
+            show-back: true;
+            back => {
+                WalletState.current-screen = 0;
+                WalletState.qr-ready = false;
+                WalletState.show-check-payment = false;
+                WalletState.status = "";
+            }
+        }
+
+        // QR frame
         Rectangle {
             background: #000000;
             border-width: 2px;
-            border-color: #FF9900.with-alpha(0.5);
+            border-color: #FF9900.with-alpha(0.4);
+
+            // Corner accents
+            Rectangle { x: 0; y: 0; width: 12px; height: 2px; background: #FF9900; }
+            Rectangle { x: 0; y: 0; width: 2px; height: 12px; background: #FF9900; }
+            Rectangle { x: parent.width - 12px; y: 0; width: 12px; height: 2px; background: #FF9900; }
+            Rectangle { x: parent.width - 2px; y: 0; width: 2px; height: 12px; background: #FF9900; }
+            Rectangle { x: 0; y: parent.height - 2px; width: 12px; height: 2px; background: #FF9900; }
+            Rectangle { x: 0; y: parent.height - 12px; width: 2px; height: 12px; background: #FF9900; }
+            Rectangle { x: parent.width - 12px; y: parent.height - 2px; width: 12px; height: 2px; background: #FF9900; }
+            Rectangle { x: parent.width - 2px; y: parent.height - 12px; width: 2px; height: 12px; background: #FF9900; }
 
             VerticalLayout {
-                padding: 16px;
-                spacing: 8px;
-
-                HorizontalLayout {
-                    height: 24px;
-                    Rectangle { width: 3px; background: #FF9900; }
-                    Rectangle { width: 8px; }
-                    Text {
-                        text: "QR // DATA OUTPUT";
-                        font-size: 11px;
-                        font-weight: 700;
-                        color: #FF9900;
-                        vertical-alignment: center;
-                    }
-                }
-
-                NervDivider {}
+                padding: 10px;
+                spacing: 4px;
 
                 Image {
                     source: WalletState.qr-image;
                     image-fit: contain;
                 }
 
-                NervDivider {}
-
                 Text {
                     text: WalletState.status;
-                    font-size: 14px;
+                    font-size: 13px;
                     font-weight: 700;
                     color: #FF9900;
                     horizontal-alignment: center;
-                    height: 28px;
+                    height: 24px;
                 }
             }
         }
 
+        // Buttons always visible at bottom
         VerticalLayout {
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-top: 8px;
-            spacing: 6px;
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            spacing: 4px;
 
             if WalletState.show-check-payment: NervButton {
                 label: "CHECK PAYMENT";
                 accent: #00FF00;
+                height: 52px;
                 clicked => {
                     WalletState.status = "CHECKING...";
                     WalletState.check-mint-payment();
@@ -506,7 +584,7 @@ export component MainApp inherits Window {
             NervButton {
                 label: "DONE";
                 accent: #555555;
-                height: 48px;
+                height: 40px;
                 clicked => {
                     WalletState.current-screen = 0;
                     WalletState.qr-ready = false;
@@ -529,57 +607,53 @@ export component MainApp inherits Window {
         }
 
         VerticalLayout {
-            padding: 24px;
-            spacing: 16px;
+            padding: 20px;
+            spacing: 12px;
 
-            Rectangle { height: 20px; }
+            NervSectionLabel { label: "WALLET DATA"; }
 
             Rectangle {
-                height: 90px;
+                height: 80px;
                 background: #000000;
                 border-width: 1px;
                 border-color: #FF9900.with-alpha(0.14);
 
                 VerticalLayout {
                     padding: 12px;
-                    spacing: 4px;
+                    spacing: 2px;
+                    Text { text: "BALANCE"; font-size: 12px; font-weight: 700; color: #FF9900; }
+                    Text { text: WalletState.balance + "  SAT"; font-size: 28px; font-weight: 700; color: #00FF00; }
+                }
+            }
 
-                    Text { text: "BALANCE"; font-size: 11px; font-weight: 700; color: #FF9900; }
-                    Text { text: WalletState.balance + "  SAT"; font-size: 32px; font-weight: 700; color: #00FF00; }
+            Rectangle {
+                height: 60px;
+                background: #000000;
+                border-width: 1px;
+                border-color: #FF9900.with-alpha(0.14);
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 2px;
+                    Text { text: "MINT URL"; font-size: 12px; font-weight: 700; color: #FF9900; }
+                    Text { text: WalletState.mint-url; font-size: 12px; color: #E3DDD4; }
                 }
             }
 
             NervDivider {}
 
+            NervSectionLabel { label: "SYSTEM"; }
+
             Rectangle {
-                height: 70px;
+                height: 44px;
                 background: #000000;
                 border-width: 1px;
                 border-color: #FF9900.with-alpha(0.14);
 
                 VerticalLayout {
-                    padding: 12px;
-                    spacing: 4px;
-
-                    Text { text: "MINT URL"; font-size: 11px; font-weight: 700; color: #FF9900; }
-                    Text { text: WalletState.mint-url; font-size: 13px; color: #E3DDD4; }
-                }
-            }
-
-            NervDivider {}
-
-            Rectangle {
-                height: 50px;
-                background: #000000;
-                border-width: 1px;
-                border-color: #FF9900.with-alpha(0.14);
-
-                VerticalLayout {
-                    padding: 12px;
-                    spacing: 4px;
-
-                    Text { text: "VERSION"; font-size: 11px; font-weight: 700; color: #FF9900; }
-                    Text { text: "CASHU PIXEL V0.1.0 // CDK 0.15 // SLINT"; font-size: 11px; color: #555555; }
+                    padding: 10px;
+                    spacing: 2px;
+                    Text { text: "CASHU PIXEL V0.2.0 // CDK 0.15 // SLINT // NERV"; font-size: 12px; color: #555555; }
                 }
             }
         }
@@ -587,4 +661,8 @@ export component MainApp inherits Window {
         Rectangle {}
         NervStatusBar { status: ""; }
     }
+
+    // ═══ GLOBAL OVERLAYS ═══
+    ScanlineOverlay { width: 720px; height: 720px; }
+    CornerCrosshairs { width: 720px; height: 720px; }
 }

@@ -272,11 +272,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
-    // BLE placeholder
+    // Start receive (BLE scan — placeholder for now)
     let ui_w = ui_weak.clone();
-    ui.global::<WalletState>().on_receive_ble(move || {
+    ui.global::<WalletState>().on_start_receive(move || {
         update_ui(&ui_w, |ui| {
-            ui.global::<WalletState>().set_status(SharedString::from("BLE NOT YET AVAILABLE"));
+            ui.global::<WalletState>().set_status(SharedString::from("SCANNING FOR BLE DEVICES..."));
         });
     });
 
