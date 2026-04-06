@@ -21,12 +21,13 @@ fn generate_qr_png(data: &str) -> Result<Vec<u8>, String> {
     use image::Luma;
     use qrcode::QrCode;
 
-    // Try normal error correction first, fall back to low
     let code = QrCode::with_error_correction_level(data, qrcode::EcLevel::L)
         .map_err(|e| format!("QR error: {}", e))?;
 
     let img = code
         .render::<Luma<u8>>()
+        .dark_color(Luma([0xFFu8]))
+        .light_color(Luma([0x00u8]))
         .quiet_zone(true)
         .min_dimensions(400, 400)
         .build();
@@ -85,10 +86,7 @@ async fn create_wallet() -> Result<Wallet, Box<dyn std::error::Error + Send + Sy
     Ok(wallet)
 }
 
-fn update_ui(
-    ui_weak: &slint::Weak<MainApp>,
-    f: impl FnOnce(&MainApp) + Send + 'static,
-) {
+fn update_ui(ui_weak: &slint::Weak<MainApp>, f: impl FnOnce(&MainApp) + Send + 'static) {
     let ui_w = ui_weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(ui) = ui_w.upgrade() {
@@ -97,22 +95,12 @@ fn update_ui(
     });
 }
 
-fn spawn_wallet_task(
-    rt: &tokio::runtime::Handle,
-    wallet_ref: Arc<Mutex<Option<AppWallet>>>,
-    ui_weak: slint::Weak<MainApp>,
-    task: impl std::future::Future<Output = ()> + Send + 'static,
-) {
-    rt.spawn(task);
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = MainApp::new()?;
     let ui_weak = ui.as_weak();
 
     let app_wallet: Arc<Mutex<Option<AppWallet>>> = Arc::new(Mutex::new(None));
 
-    // Shared tokio runtime on a background thread
     let rt = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -129,10 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(wallet) => {
                 let balance: u64 = wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
                 let mut w = wallet_ref.lock().await;
-                *w = Some(AppWallet {
-                    wallet,
-                    current_quote: None,
-                });
+                *w = Some(AppWallet { wallet, current_quote: None });
                 drop(w);
                 update_ui(&ui_w, move |ui| {
                     let state = ui.global::<WalletState>();
@@ -143,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 });
             }
             Err(e) => {
-                let msg = format!("Init error: {}", e);
+                let msg = format!("INIT ERROR: {}", e);
                 update_ui(&ui_w, move |ui| {
                     ui.global::<WalletState>().set_status(SharedString::from(msg));
                 });
@@ -154,25 +139,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Mint quote
     let wallet_ref = app_wallet.clone();
     let ui_w = ui_weak.clone();
-    let rt_handle = rt.handle().clone();
+    let rt_h = rt.handle().clone();
     ui.global::<WalletState>().on_request_mint_quote(move |amount| {
         let wallet_ref = wallet_ref.clone();
         let ui_w = ui_w.clone();
-        rt_handle.spawn(async move {
+        rt_h.spawn(async move {
             let mut w = wallet_ref.lock().await;
             if let Some(ref mut app) = *w {
-                match app
-                    .wallet
-                    .mint_quote(KnownMethod::Bolt11, Some(Amount::from(amount as u64)), None, None)
-                    .await
-                {
+                match app.wallet.mint_quote(KnownMethod::Bolt11, Some(Amount::from(amount as u64)), None, None).await {
                     Ok(quote) => {
                         let invoice = quote.request.clone();
                         app.current_quote = Some(quote);
                         drop(w);
                         match generate_qr_png(&invoice) {
                             Ok(png) => {
-                                let status = format!("Pay {} sat", amount);
+                                let status = format!("PAY {} SAT", amount);
                                 update_ui(&ui_w, move |ui| {
                                     let state = ui.global::<WalletState>();
                                     state.set_qr_image(png_to_slint_image(&png));
@@ -190,7 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     Err(e) => {
-                        let msg = format!("Error: {}", e);
+                        let msg = format!("ERROR: {}", e);
                         update_ui(&ui_w, move |ui| {
                             ui.global::<WalletState>().set_status(SharedString::from(msg));
                         });
@@ -200,24 +181,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
-    // Check mint payment
+    // Check payment
     let wallet_ref = app_wallet.clone();
     let ui_w = ui_weak.clone();
-    let rt_handle = rt.handle().clone();
+    let rt_h = rt.handle().clone();
     ui.global::<WalletState>().on_check_mint_payment(move || {
         let wallet_ref = wallet_ref.clone();
         let ui_w = ui_w.clone();
-        rt_handle.spawn(async move {
+        rt_h.spawn(async move {
             let mut w = wallet_ref.lock().await;
             if let Some(ref mut app) = *w {
                 if let Some(quote) = app.current_quote.take() {
                     match app.wallet.mint(&quote.id, Default::default(), None).await {
-                        Ok(_proofs) => {
+                        Ok(_) => {
                             let bal: u64 = app.wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
                             update_ui(&ui_w, move |ui| {
                                 let state = ui.global::<WalletState>();
                                 state.set_balance(SharedString::from(format!("{}", bal)));
-                                state.set_status(SharedString::from(format!("Minted! Balance: {} sat", bal)));
+                                state.set_status(SharedString::from(format!("MINTED! BALANCE: {} SAT", bal)));
                                 state.set_show_check_payment(false);
                             });
                         }
@@ -226,17 +207,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let is_pending = msg.to_lowercase().contains("not paid")
                                 || msg.to_lowercase().contains("pending")
                                 || msg.to_lowercase().contains("unpaid");
-                            if is_pending {
-                                app.current_quote = Some(quote);
-                            }
-                            let display_msg = if is_pending {
-                                "Not paid yet - tap again".to_string()
-                            } else {
-                                format!("Error: {}", msg)
-                            };
+                            if is_pending { app.current_quote = Some(quote); }
+                            let display = if is_pending { "NOT PAID YET — TAP AGAIN".into() } else { format!("ERROR: {}", msg) };
                             update_ui(&ui_w, move |ui| {
-                                ui.global::<WalletState>()
-                                    .set_status(SharedString::from(display_msg));
+                                ui.global::<WalletState>().set_status(SharedString::from(display));
                             });
                         }
                     }
@@ -245,21 +219,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
-    // Send token
+    // Send
     let wallet_ref = app_wallet.clone();
     let ui_w = ui_weak.clone();
-    let rt_handle = rt.handle().clone();
+    let rt_h = rt.handle().clone();
     ui.global::<WalletState>().on_request_send(move |amount| {
         let wallet_ref = wallet_ref.clone();
         let ui_w = ui_w.clone();
-        rt_handle.spawn(async move {
+        rt_h.spawn(async move {
             let mut w = wallet_ref.lock().await;
             if let Some(ref mut app) = *w {
-                match app
-                    .wallet
-                    .prepare_send(Amount::from(amount as u64), SendOptions::default())
-                    .await
-                {
+                match app.wallet.prepare_send(Amount::from(amount as u64), SendOptions::default()).await {
                     Ok(prepared) => match prepared.confirm(None).await {
                         Ok(token) => {
                             let token_str = token.to_string();
@@ -267,7 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             drop(w);
                             match generate_qr_png(&token_str) {
                                 Ok(png) => {
-                                    let status = format!("Scan to receive {} sat", amount);
+                                    let status = format!("SCAN TO RECEIVE {} SAT", amount);
                                     update_ui(&ui_w, move |ui| {
                                         let state = ui.global::<WalletState>();
                                         state.set_balance(SharedString::from(format!("{}", bal)));
@@ -279,45 +249,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     });
                                 }
                                 Err(_) => {
-                                    // Token too large for QR — show the token as text instead
-                                    let short = format!("{}...", &token_str[..60]);
+                                    let short = format!("{}...", &token_str[..60.min(token_str.len())]);
                                     update_ui(&ui_w, move |ui| {
                                         let state = ui.global::<WalletState>();
                                         state.set_balance(SharedString::from(format!("{}", bal)));
-                                        state.set_status(SharedString::from(
-                                            format!("Token too large for QR. Token: {}", short),
-                                        ));
+                                        state.set_status(SharedString::from(format!("TOKEN TOO LARGE FOR QR: {}", short)));
                                     });
                                 }
                             }
                         }
                         Err(e) => {
-                            let msg = format!("Error: {}", e);
-                            update_ui(&ui_w, move |ui| {
-                                ui.global::<WalletState>().set_status(SharedString::from(msg));
-                            });
+                            let msg = format!("ERROR: {}", e);
+                            update_ui(&ui_w, move |ui| { ui.global::<WalletState>().set_status(SharedString::from(msg)); });
                         }
                     },
                     Err(e) => {
-                        let msg = format!("Error: {}", e);
-                        update_ui(&ui_w, move |ui| {
-                            ui.global::<WalletState>().set_status(SharedString::from(msg));
-                        });
+                        let msg = format!("ERROR: {}", e);
+                        update_ui(&ui_w, move |ui| { ui.global::<WalletState>().set_status(SharedString::from(msg)); });
                     }
                 }
             }
         });
     });
 
-    // BLE receive (placeholder)
+    // BLE placeholder
     let ui_w = ui_weak.clone();
     ui.global::<WalletState>().on_receive_ble(move || {
-        let ui_w = ui_w.clone();
-        let _ = slint::invoke_from_event_loop(move || {
-            if let Some(ui) = ui_w.upgrade() {
-                ui.global::<WalletState>()
-                    .set_status(SharedString::from("BLE not yet available"));
-            }
+        update_ui(&ui_w, |ui| {
+            ui.global::<WalletState>().set_status(SharedString::from("BLE NOT YET AVAILABLE"));
         });
     });
 
