@@ -153,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         drop(w);
                         match generate_qr_png(&invoice) {
                             Ok(png) => {
-                                let status = format!("PAY {} SAT", amount);
+                                let status = format!("SCAN WITH A LIGHTNING WALLET // PAY {} SAT", amount);
                                 update_ui(&ui_w, move |ui| {
                                     let state = ui.global::<WalletState>();
                                     state.set_qr_image(png_to_slint_image(&png));
@@ -198,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             update_ui(&ui_w, move |ui| {
                                 let state = ui.global::<WalletState>();
                                 state.set_balance(SharedString::from(format!("{}", bal)));
-                                state.set_status(SharedString::from(format!("MINTED! BALANCE: {} SAT", bal)));
+                                state.set_status(SharedString::from(format!("MINT COMPLETE // BALANCE {} SAT", bal)));
                                 state.set_show_check_payment(false);
                             });
                         }
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 || msg.to_lowercase().contains("pending")
                                 || msg.to_lowercase().contains("unpaid");
                             if is_pending { app.current_quote = Some(quote); }
-                            let display = if is_pending { "NOT PAID YET — TAP AGAIN".into() } else { format!("ERROR: {}", msg) };
+                            let display = if is_pending { "NOT PAID YET // TAP CHECK PAYMENT AGAIN".into() } else { format!("ERROR: {}", msg) };
                             update_ui(&ui_w, move |ui| {
                                 ui.global::<WalletState>().set_status(SharedString::from(display));
                             });
@@ -272,13 +272,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
-    // Start receive (BLE scan — placeholder for now)
-    let ui_w = ui_weak.clone();
-    ui.global::<WalletState>().on_start_receive(move || {
-        update_ui(&ui_w, |ui| {
-            ui.global::<WalletState>().set_status(SharedString::from("SCANNING FOR BLE DEVICES..."));
-        });
-    });
+    // Start receive (BLE scan — placeholder for now). Sets no status: the UI must not
+    // claim a scan is running until BLE receive actually exists.
+    ui.global::<WalletState>().on_start_receive(|| {});
 
     ui.run()?;
     Ok(())

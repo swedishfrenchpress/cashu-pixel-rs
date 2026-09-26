@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-26T22:30:00+02:00",
+  "title": "Design System: Cashu Pixel",
+  "extensions": {
+    "colorMeta": {
+      "nerv-orange": {
+        "role": "primary",
+        "displayName": "NERV Orange",
+        "canonical": "#FF9900",
+        "tonalRamp": [
+          "oklch(15% 0.174 64.6)",
+          "oklch(26% 0.174 64.6)",
+          "oklch(38% 0.174 64.6)",
+          "oklch(49% 0.174 64.6)",
+          "oklch(61% 0.174 64.6)",
+          "oklch(72% 0.174 64.6)",
+          "oklch(84% 0.174 64.6)",
+          "oklch(95% 0.174 64.6)"
+        ]
+      },
+      "phosphor-green": {
+        "role": "secondary",
+        "displayName": "Phosphor Green",
+        "canonical": "#00FF00",
+        "tonalRamp": [
+          "oklch(15% 0.295 142.5)",
+          "oklch(26% 0.295 142.5)",
+          "oklch(38% 0.295 142.5)",
+          "oklch(49% 0.295 142.5)",
+          "oklch(61% 0.295 142.5)",
+          "oklch(72% 0.295 142.5)",
+          "oklch(84% 0.295 142.5)",
+          "oklch(95% 0.295 142.5)"
+        ]
+      },
+      "alarm-red": {
+        "role": "tertiary",
+        "displayName": "Alarm Red",
+        "canonical": "#FF2B1D",
+        "tonalRamp": [
+          "oklch(15% 0.244 29.5)",
+          "oklch(26% 0.244 29.5)",
+          "oklch(38% 0.244 29.5)",
+          "oklch(49% 0.244 29.5)",
+          "oklch(61% 0.244 29.5)",
+          "oklch(72% 0.244 29.5)",
+          "oklch(84% 0.244 29.5)",
+          "oklch(95% 0.244 29.5)"
+        ]
+      },
+      "lightning-amber": {
+        "role": "tertiary",
+        "displayName": "Lightning Amber",
+        "canonical": "#FFAA00",
+        "tonalRamp": [
+          "oklch(15% 0.171 73.3)",
+          "oklch(26% 0.171 73.3)",
+          "oklch(38% 0.171 73.3)",
+          "oklch(49% 0.171 73.3)",
+          "oklch(61% 0.171 73.3)",
+          "oklch(72% 0.171 73.3)",
+          "oklch(84% 0.171 73.3)",
+          "oklch(95% 0.171 73.3)"
+        ]
+      },
+      "pattern-blue": {
+        "role": "tertiary",
+        "displayName": "Pattern Blue",
+        "canonical": "#00F6FF",
+        "tonalRamp": [
+          "oklch(15% 0.150 199.5)",
+          "oklch(26% 0.150 199.5)",
+          "oklch(38% 0.150 199.5)",
+          "oklch(49% 0.150 199.5)",
+          "oklch(61% 0.150 199.5)",
+          "oklch(72% 0.150 199.5)",
+          "oklch(84% 0.150 199.5)",
+          "oklch(95% 0.150 199.5)"
+        ]
+      },
+      "void-black": {
+        "role": "neutral",
+        "displayName": "Void Black",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "console-black": {
+        "role": "neutral",
+        "displayName": "Console Black",
+        "canonical": "#0A0A0A",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "standby-gray": {
+        "role": "neutral",
+        "displayName": "Standby Gray",
+        "canonical": "#555555",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "standby-text": {
+        "role": "neutral",
+        "displayName": "Standby Text",
+        "canonical": "#838383",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The balance on Home (88px at 6+ digits)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Selected-amount readouts; 72px variant for the Settings balance."
+      },
+      "keypad": {
+        "displayName": "Keypad",
+        "purpose": "Amount key labels."
+      },
+      "channel": {
+        "displayName": "Channel",
+        "purpose": "SEND / RECEIVE on the Home keys."
+      },
+      "action": {
+        "displayName": "Action",
+        "purpose": "Primary and standby action labels."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Screen header titles."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Readout captions, status bar, banner, header subtitles."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Key hints (18px) and the mint host (20px)."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "hyperpixel-square",
+        "value": "720px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Channel Key (Send)",
+      "kind": "button",
+      "refersTo": "channel-key-send",
+      "description": "Home's SEND key: pixel triangle, channel label, one-line hint.",
+      "html": "<button class=\"ds-chkey\" style=\"--c:#FF2B1D\"><span class=\"ds-tri-up\"></span><span class=\"ds-chkey-label\">SEND</span><span class=\"ds-chkey-hint\">ECASH TOKEN AS QR</span></button>",
+      "css": ".ds-chkey { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; width:328px; height:300px; background:color-mix(in srgb, var(--c) 5%, #000); color:var(--c); border:1px solid color-mix(in srgb, var(--c) 75%, transparent); border-radius:0; font-family:'DejaVu Sans', sans-serif; cursor:pointer; } .ds-tri-up { width:0; height:0; border-left:38px solid transparent; border-right:38px solid transparent; border-bottom:42px solid var(--c); } .ds-chkey-label { font-size:40px; font-weight:700; letter-spacing:6px; } .ds-chkey-hint { font-size:18px; } .ds-chkey:hover, .ds-chkey:focus-visible { outline:1px solid color-mix(in srgb, var(--c) 40%, transparent); outline-offset:-7px; } .ds-chkey:active { background:color-mix(in srgb, var(--c) 20%, #000); border:3px solid var(--c); }"
+    },
+    {
+      "name": "Channel Key (Receive)",
+      "kind": "button",
+      "refersTo": "channel-key-receive",
+      "description": "Home's RECEIVE key in Phosphor Green.",
+      "html": "<button class=\"ds-chkey-r\"><span class=\"ds-tri-down\"></span><span class=\"ds-chkey-r-label\">RECEIVE</span><span class=\"ds-chkey-r-hint\">MINT VIA LIGHTNING</span></button>",
+      "css": ".ds-chkey-r { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; width:328px; height:300px; background:rgba(0,255,0,0.05); color:#00FF00; border:1px solid rgba(0,255,0,0.75); border-radius:0; font-family:'DejaVu Sans', sans-serif; cursor:pointer; } .ds-tri-down { width:0; height:0; border-left:38px solid transparent; border-right:38px solid transparent; border-top:42px solid #00FF00; } .ds-chkey-r-label { font-size:40px; font-weight:700; letter-spacing:6px; } .ds-chkey-r-hint { font-size:18px; } .ds-chkey-r:hover, .ds-chkey-r:focus-visible { outline:1px solid rgba(0,255,0,0.4); outline-offset:-7px; } .ds-chkey-r:active { background:rgba(0,255,0,0.2); border:3px solid #00FF00; }"
+    },
+    {
+      "name": "Action Button",
+      "kind": "button",
+      "refersTo": "button-action",
+      "description": "Full-width primary action in the screen's channel colour; dims when unavailable.",
+      "html": "<button class=\"ds-action\">CREATE LIGHTNING INVOICE</button> <button class=\"ds-action\" disabled>CREATE LIGHTNING INVOICE</button>",
+      "css": ".ds-action { width:672px; height:112px; margin-bottom:12px; background:rgba(255,170,0,0.05); color:#FFAA00; border:1px solid rgba(255,170,0,0.75); border-left:6px solid rgba(255,170,0,0.45); border-radius:0; font:700 28px 'DejaVu Sans', sans-serif; letter-spacing:2px; cursor:pointer; } .ds-action:hover, .ds-action:focus-visible { outline:1px solid rgba(255,170,0,0.35); outline-offset:-6px; } .ds-action:active { background:rgba(255,170,0,0.2); border:2px solid #FFAA00; border-left:6px solid #FFAA00; } .ds-action:disabled { background:#000; color:#838383; border-color:rgba(85,85,85,0.6); cursor:not-allowed; }"
+    },
+    {
+      "name": "Standby Button",
+      "kind": "button",
+      "refersTo": "button-standby",
+      "description": "Secondary action (DONE) in Standby Text.",
+      "html": "<button class=\"ds-standby\">DONE</button>",
+      "css": ".ds-standby { width:200px; height:100px; background:rgba(131,131,131,0.05); color:#838383; border:1px solid rgba(131,131,131,0.75); border-left:6px solid rgba(131,131,131,0.45); border-radius:0; font:700 28px 'DejaVu Sans', sans-serif; letter-spacing:2px; cursor:pointer; } .ds-standby:hover, .ds-standby:focus-visible { outline:1px solid rgba(131,131,131,0.35); outline-offset:-6px; } .ds-standby:active { background:rgba(131,131,131,0.2); border-color:#838383; }"
+    },
+    {
+      "name": "Amount Key",
+      "kind": "chip",
+      "refersTo": "amount-key",
+      "description": "Keypad amount; selected is the reference lit state, disabled marks amounts above the balance.",
+      "html": "<div class=\"ds-keys\"><button class=\"ds-key\">21</button><button class=\"ds-key ds-key-on\">100</button><button class=\"ds-key\" disabled>1K</button></div>",
+      "css": ".ds-keys { display:grid; grid-template-columns:repeat(3, 216px); gap:12px; } .ds-key { height:114px; background:#000; color:rgba(255,170,0,0.9); border:1px solid rgba(255,170,0,0.6); border-radius:0; font:700 44px 'DejaVu Sans', sans-serif; cursor:pointer; } .ds-key:hover, .ds-key:focus-visible { border-color:#FFAA00; } .ds-key:active { background:rgba(255,170,0,0.25); } .ds-key-on { background:rgba(255,170,0,0.14); color:#FFAA00; border:2px solid #FFAA00; outline:1px solid rgba(255,170,0,0.35); outline-offset:-7px; } .ds-key:disabled { color:#838383; border-color:rgba(85,85,85,0.6); cursor:not-allowed; }"
+    },
+    {
+      "name": "Header Bar",
+      "kind": "nav",
+      "refersTo": "header",
+      "description": "72px header: channel bar, pixel back arrow, title, subtitle or text action.",
+      "html": "<header class=\"ds-header\"><span class=\"ds-back\"><span class=\"ds-back-head\"></span><span class=\"ds-back-shaft\"></span></span><span class=\"ds-title\">RECEIVE // INCOMING</span><span class=\"ds-sub\">LIGHTNING</span></header>",
+      "css": ".ds-header { display:flex; align-items:center; height:72px; background:#0A0A0A; border-left:6px solid #00FF00; border-bottom:2px solid rgba(0,255,0,0.45); font-family:'DejaVu Sans', sans-serif; } .ds-back { display:flex; align-items:center; justify-content:center; width:104px; height:72px; border-right:1px solid rgba(0,255,0,0.35); cursor:pointer; } .ds-back:hover { background:rgba(0,255,0,0.2); } .ds-back-head { width:0; height:0; border-top:17px solid transparent; border-bottom:17px solid transparent; border-right:20px solid #00FF00; } .ds-back-shaft { width:22px; height:11px; background:#00FF00; } .ds-title { margin-left:16px; flex:1; font-size:24px; font-weight:700; color:#00FF00; } .ds-sub { margin-right:20px; font-size:18px; font-weight:700; color:#838383; }"
+    },
+    {
+      "name": "Balance Readout",
+      "kind": "card",
+      "refersTo": "readout",
+      "description": "Home's balance: Display sats with a baseline unit, inside a built green double frame with brackets.",
+      "html": "<div class=\"ds-balance\"><div class=\"ds-balance-cap\">BALANCE</div><div class=\"ds-balance-val\">22<span>SAT</span></div><div class=\"ds-balance-mint\">MINT // mint.minibits.cash</div></div>",
+      "css": ".ds-balance { width:672px; height:236px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; border:1px solid rgba(0,255,0,0.35); box-shadow:inset 0 0 0 4px #000, inset 0 0 0 5px rgba(0,255,0,0.12); font-family:'DejaVu Sans', sans-serif; } .ds-balance-cap { font-size:20px; font-weight:700; letter-spacing:8px; color:#FF9900; } .ds-balance-val { font-size:112px; font-weight:700; line-height:1.1; color:#00FF00; } .ds-balance-val span { font-size:40px; margin-left:18px; } .ds-balance-mint { font-size:20px; color:#838383; }"
+    },
+    {
+      "name": "Status Bar",
+      "kind": "custom",
+      "refersTo": "status-bar",
+      "description": "44px system-status line; idle reads SYSTEM READY in Standby Text.",
+      "html": "<div class=\"ds-status\"><span class=\"ds-status-dot\"></span>SYSTEM READY</div>",
+      "css": ".ds-status { display:flex; align-items:center; gap:14px; width:720px; height:44px; padding-left:22px; background:#0A0A0A; border-top:1px solid rgba(255,153,0,0.3); border-left:6px solid rgba(255,153,0,0.5); font:700 18px 'DejaVu Sans', sans-serif; color:#838383; box-sizing:border-box; } .ds-status-dot { width:8px; height:8px; background:#555555; }"
+    },
+    {
+      "name": "Scan Banner",
+      "kind": "custom",
+      "description": "Bluetooth channel banner; inactive (current) state in Standby colours.",
+      "html": "<div class=\"ds-scan\"><span class=\"ds-scan-sq\"></span>BLUETOOTH RECEIVE // IN DEVELOPMENT<span class=\"ds-scan-sq\"></span></div>",
+      "css": ".ds-scan { display:flex; align-items:center; justify-content:center; gap:14px; width:672px; height:52px; background:#0A0A0A; border:1px solid rgba(85,85,85,0.45); border-left:8px solid rgba(85,85,85,0.25); border-right:8px solid rgba(85,85,85,0.25); font:700 18px 'DejaVu Sans', sans-serif; color:#838383; } .ds-scan-sq { width:10px; height:10px; background:rgba(85,85,85,0.7); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The MAGI Readout",
+    "overview": "The wallet is a monitor in NERV's command centre: a black glass field on which the system reports state. Nothing here decorates for its own sake. Frames, bracket corners, and scanlines exist to make the screen read as an instrument, and every number on it (balance, amount, invoice) reads as a live readout. The mood is urgent, precise, and cinematic: a live operation, where every value matters and every action is announced.\n\nThe system runs quiet structure with loud channels. Structure sits back in low-strength hairlines, while channels (send, receive, Lightning, Bluetooth) carry saturated alarm colour. Controls feel like an alarm panel: loud, colour-coded, unmistakable, and big enough for a stranger's thumb. At rest the screen is flat. Under a finger, or when selected, a control lights up like an indicator on a console.\n\nThe system is designed natively for one physical object: the 72 × 72 mm HyperPixel 4.0 Square at about 254 PPI. Every size is chosen in millimetres (10px ≈ 1mm), never in desktop pixels. It has one column, no scrolling, and touch only. It must never read as a generic crypto dashboard (gradients, glassy cards, purple-blue fintech sheen, coin logos) or be assembled from stock OS widgets (Material, Fluent, or Cupertino controls).",
+    "keyCharacteristics": [
+      "The whole square is used. Each screen is one full-height stack: header, readout, controls, action, status.",
+      "One saturated channel colour per function; orange is the system's own voice.",
+      "Uppercase terminal type, bold almost everywhere, with `//` as the separator.",
+      "Square corners, 1px hairlines, bracketed corners, stepped pixel icons, scanlines.",
+      "Flat at rest, lit on touch: glow is built from frames and tints, never from shadows."
+    ],
+    "rules": [
+      {
+        "name": "The Channel Rule",
+        "body": "Every function owns exactly one colour, and nothing else wears it: SEND is red, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.",
+        "section": "colors"
+      },
+      {
+        "name": "The Green Means Sats Rule",
+        "body": "Phosphor Green is reserved for sat amounts, receiving, and success. An amount is green even on the red Send screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The Strength Ladder Rule",
+        "body": "Colours sit on black at stepped strengths, never as blended mid-tones:\n- text at 85–100%\n- control frames at 60–75% (100% when lit)\n- structural hairlines at 12–45%\n- tints at 5% at rest, 12–25% when lit or pressed, and 6% for scanlines",
+        "section": "colors"
+      },
+      {
+        "name": "The Millimetre Rule",
+        "body": "Size everything physically: 10px ≈ 1mm on this panel. A desktop-sized pixel value is roughly 60% too small here.",
+        "section": "typography"
+      },
+      {
+        "name": "The 18px Floor Rule",
+        "body": "No text is smaller than 18px (about 1.8mm). Primary labels are 24px or larger.",
+        "section": "typography"
+      },
+      {
+        "name": "The Terminal Voice Rule",
+        "body": "Interface text is uppercase, and `//` separates a subject from its qualifier (\"SEND // TOKEN\", \"INVOICE // LIGHTNING\"). Hostnames and URLs keep their real case (\"mint.minibits.cash\").",
+        "section": "typography"
+      },
+      {
+        "name": "The Built Glow Rule",
+        "body": "Never use `drop-shadow-*`; it renders nothing here. Light is made of frames and tints.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Lit-On-Active Rule",
+        "body": "Glow means \"active, selected, or under a finger now\". A resting element never glows, and a glowing element is always something the user can act on or is currently acting on.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do size in millimetres: touch targets 80px (8mm) or larger, primary actions 100px or larger, text 18px or larger.",
+      "Do fill the square. Let keypads and keys stretch to absorb leftover height instead of leaving empty space below the content.",
+      "Do give each screen exactly one channel colour, shown in its header bar, keypad, and primary action.",
+      "Do keep Phosphor Green for sats, receiving, and success only.",
+      "Do give every control a pressed state and, where it can be unavailable, a disabled state that still explains itself when tapped.",
+      "Do build lit states from stacked 1px frames and a stepped tint (see Elevation & Depth).",
+      "Do position decorative squares explicitly, or wrap them in a centred `VerticalLayout`. Inside a `HorizontalLayout`, a fixed-size rectangle sits at the top, not the middle.",
+      "Do write interface text in uppercase with `//` separators, leaving hostnames in their real case."
+    ],
+    "donts": [
+      "Don't carry over desktop pixel sizes. 12px text and 44px targets are about 1.2mm and 4.4mm on this panel.",
+      "Don't use `drop-shadow-*`; the software renderer draws nothing.",
+      "Don't round a corner, introduce a circle, or use a text glyph (◄, ▶, ✓) as an icon. Draw stepped pixel icons from rectangles.",
+      "Don't import `std-widgets.slint` or any Material, Fluent, or Cupertino control.",
+      "Don't use gradients, glass or blur, purple-blue fintech colour, or coin logos.",
+      "Don't let Pattern Blue stand for anything but Bluetooth, or any channel colour stand for a different function.",
+      "Don't set text in Standby Gray (#555555); use Standby Text (#838383).",
+      "Don't name a Slint component property `color` on anything that inherits `Rectangle`; it collides with a deprecated built-in and fails the build. Use `tint`."
+    ]
+  }
+}
