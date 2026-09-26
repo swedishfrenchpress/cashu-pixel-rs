@@ -1,0 +1,21 @@
+#!/bin/sh
+# Cashu NERV launcher.
+# Inside the desktop session: a fullscreen Wayland window, so exiting returns to the desktop.
+# Outside it (no compositor): draw straight to the display via KMS.
+if [ -n "$WAYLAND_DISPLAY" ] || [ -n "$DISPLAY" ]; then
+    export SLINT_BACKEND="${SLINT_BACKEND:-winit-software}"
+    export SLINT_FULLSCREEN=1
+else
+    export SLINT_BACKEND="${SLINT_BACKEND:-linuxkms-software}"
+fi
+
+# App output and exit status go to a small log (reset once it passes 1 MB)
+LOG="${XDG_CACHE_HOME:-$HOME/.cache}/cashu-nerv.log"
+mkdir -p "$(dirname "$LOG")"
+[ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 1048576 ] && : > "$LOG"
+echo "--- $(date '+%F %T') launch ($SLINT_BACKEND)" >> "$LOG"
+
+# One instance at a time: two copies would share the same wallet database.
+LOCK="${XDG_RUNTIME_DIR:-/tmp}/cashu-nerv.lock"
+flock -n "$LOCK" /usr/local/lib/cashu-nerv/cashu-nerv "$@" >> "$LOG" 2>&1
+echo "--- $(date '+%F %T') exit $?" >> "$LOG"

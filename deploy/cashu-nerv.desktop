@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cashu NERV
+GenericName=Ecash Wallet
+Comment=Cashu ecash wallet for the HyperPixel 4.0 Square
+Exec=cashu-nerv
+Icon=cashu-nerv
+Terminal=false
+StartupNotify=false
+Categories=Office;Finance;

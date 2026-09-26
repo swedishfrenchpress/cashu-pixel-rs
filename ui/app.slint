@@ -8,7 +8,7 @@
 global Nerv {
     out property <color> orange: #FF9900;
     out property <color> green: #00FF00;
-    out property <color> red: #FF2B1D;
+    out property <color> purple: #B266FF; // Unit-01 Purple: the SEND channel
     out property <color> amber: #FFAA00;
     out property <color> blue: #00F6FF;
     out property <color> void: #000000;
@@ -42,6 +42,23 @@ component PixelTriangle inherits Rectangle {
         y: root.dir == 2 ? (root.steps - 1 - i) * root.unit : i * root.unit;
         width: root.dir == 2 ? root.unit : root.dir == 0 ? (2 * i + 1) * root.unit : (2 * (root.steps - 1 - i) + 1) * root.unit;
         height: root.dir == 2 ? (2 * i + 1) * root.unit : root.unit;
+    }
+}
+
+// ─── PIXEL CHECK (stepped check mark; square geometry only) ───
+component PixelCheck inherits Rectangle {
+    in property <color> tint: Nerv.green;
+    in property <length> unit: 10px;
+    width: 9 * unit;
+    height: 7 * unit;
+
+    // Short stroke down-right, then the long stroke up-right; each cell is 2×2 units
+    for cell in [{ x: 0, y: 3 }, { x: 1, y: 4 }, { x: 2, y: 5 }, { x: 3, y: 4 }, { x: 4, y: 3 }, { x: 5, y: 2 }, { x: 6, y: 1 }, { x: 7, y: 0 }]: Rectangle {
+        x: cell.x * root.unit;
+        y: cell.y * root.unit;
+        width: 2 * root.unit;
+        height: 2 * root.unit;
+        background: root.tint;
     }
 }
 
@@ -439,14 +456,17 @@ export global WalletState {
     in-out property <int> selected-amount: 0;
     in-out property <image> qr-image;
     in-out property <bool> qr-ready: false;
-    in-out property <bool> show-check-payment: false;
+    in-out property <bool> qr-animated: false;
+    in-out property <bool> qr-is-invoice: false;
+    in-out property <bool> mint-complete: false;
     in-out property <int> current-screen: 0;
     // 0=home, 1=receive(mint+ble), 2=send, 4=qr, 5=settings
 
     callback request-mint-quote(int);
-    callback check-mint-payment();
     callback request-send(int);
     callback start-receive();
+    callback exit-app();
+    callback reclaim-tokens();
 }
 
 // ─── MAIN ───
@@ -455,7 +475,7 @@ export component MainApp inherits Window {
     height: 720px;
     no-frame: true;
     background: Nerv.void;
-    title: "NERV // CASHU";
+    title: "Cashu NERV";
 
     property <float> balance-sats: WalletState.balance.is-float() ? WalletState.balance.to-float() : 0;
     property <int> amount: WalletState.selected-amount;
@@ -520,12 +540,6 @@ export component MainApp inherits Window {
                             Text { text: "SAT"; font-size: 40px; font-weight: 700; color: Nerv.green; }
                         }
                     }
-                    Text {
-                        text: "MINT // " + WalletState.mint-url;
-                        font-size: 20px;
-                        color: Nerv.standby-text;
-                        horizontal-alignment: center;
-                    }
                 }
             }
 
@@ -538,7 +552,7 @@ export component MainApp inherits Window {
                     width: Nerv.half-w;
                     label: "SEND";
                     hint: "ECASH TOKEN AS QR";
-                    accent: Nerv.red;
+                    accent: Nerv.purple;
                     icon-dir: 0;
                     clicked => {
                         WalletState.current-screen = 2;
@@ -628,7 +642,7 @@ export component MainApp inherits Window {
         NervHeader {
             title: "SEND // TOKEN";
             subtitle: "OFFLINE";
-            accent: Nerv.red;
+            accent: Nerv.purple;
             show-back: true;
             back => { WalletState.current-screen = 0; WalletState.status = ""; }
         }
@@ -640,7 +654,7 @@ export component MainApp inherits Window {
 
             AmountReadout {
                 amount: root.amount;
-                accent: Nerv.red;
+                accent: Nerv.purple;
                 caption: "SEND AMOUNT";
                 aside: "AVAILABLE " + WalletState.balance + " SAT";
             }
@@ -649,20 +663,20 @@ export component MainApp inherits Window {
                 spacing: Nerv.gap;
                 vertical-stretch: 1;
                 Row {
-                    AmountKey { label: "10"; accent: Nerv.red; enabled: root.balance-sats >= 10; selected: root.amount == 10; clicked => { if self.enabled { WalletState.selected-amount = 10; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
-                    AmountKey { label: "21"; accent: Nerv.red; enabled: root.balance-sats >= 21; selected: root.amount == 21; clicked => { if self.enabled { WalletState.selected-amount = 21; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
-                    AmountKey { label: "50"; accent: Nerv.red; enabled: root.balance-sats >= 50; selected: root.amount == 50; clicked => { if self.enabled { WalletState.selected-amount = 50; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
+                    AmountKey { label: "10"; accent: Nerv.purple; enabled: root.balance-sats >= 10; selected: root.amount == 10; clicked => { if self.enabled { WalletState.selected-amount = 10; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
+                    AmountKey { label: "21"; accent: Nerv.purple; enabled: root.balance-sats >= 21; selected: root.amount == 21; clicked => { if self.enabled { WalletState.selected-amount = 21; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
+                    AmountKey { label: "50"; accent: Nerv.purple; enabled: root.balance-sats >= 50; selected: root.amount == 50; clicked => { if self.enabled { WalletState.selected-amount = 50; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
                 }
                 Row {
-                    AmountKey { label: "100"; accent: Nerv.red; enabled: root.balance-sats >= 100; selected: root.amount == 100; clicked => { if self.enabled { WalletState.selected-amount = 100; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
-                    AmountKey { label: "500"; accent: Nerv.red; enabled: root.balance-sats >= 500; selected: root.amount == 500; clicked => { if self.enabled { WalletState.selected-amount = 500; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
-                    AmountKey { label: "1K"; accent: Nerv.red; enabled: root.balance-sats >= 1000; selected: root.amount == 1000; clicked => { if self.enabled { WalletState.selected-amount = 1000; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
+                    AmountKey { label: "100"; accent: Nerv.purple; enabled: root.balance-sats >= 100; selected: root.amount == 100; clicked => { if self.enabled { WalletState.selected-amount = 100; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
+                    AmountKey { label: "500"; accent: Nerv.purple; enabled: root.balance-sats >= 500; selected: root.amount == 500; clicked => { if self.enabled { WalletState.selected-amount = 500; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
+                    AmountKey { label: "1K"; accent: Nerv.purple; enabled: root.balance-sats >= 1000; selected: root.amount == 1000; clicked => { if self.enabled { WalletState.selected-amount = 1000; WalletState.status = ""; } else { WalletState.status = "NOT ENOUGH SATS // BALANCE " + WalletState.balance + " SAT"; } } }
                 }
             }
 
             NervButton {
                 label: "CREATE TOKEN QR";
-                accent: Nerv.red;
+                accent: Nerv.purple;
                 height: 112px;
                 enabled: root.amount > 0;
                 clicked => {
@@ -676,7 +690,7 @@ export component MainApp inherits Window {
             }
         }
 
-        NervStatusBar { status: WalletState.status; accent: Nerv.red; }
+        NervStatusBar { status: WalletState.status; accent: Nerv.purple; }
     }
 
     // ═══ QR VIEW ═══
@@ -684,18 +698,21 @@ export component MainApp inherits Window {
         spacing: 0;
 
         NervHeader {
-            title: WalletState.show-check-payment ? "INVOICE // LIGHTNING" : "TOKEN // ECASH";
-            accent: WalletState.show-check-payment ? Nerv.amber : Nerv.red;
+            title: !WalletState.qr-is-invoice ? "TOKEN // ECASH" : WalletState.mint-complete ? "INVOICE // PAID" : "INVOICE // LIGHTNING";
+            subtitle: WalletState.qr-is-invoice && !WalletState.mint-complete ? "AWAITING PAYMENT" : "";
+            accent: !WalletState.qr-is-invoice ? Nerv.purple : WalletState.mint-complete ? Nerv.green : Nerv.amber;
             show-back: true;
             back => {
                 WalletState.current-screen = 0;
                 WalletState.qr-ready = false;
-                WalletState.show-check-payment = false;
+                WalletState.qr-animated = false;
+                WalletState.qr-is-invoice = false;
+                WalletState.mint-complete = false;
                 WalletState.status = "";
             }
         }
 
-        // QR stage
+        // QR stage (the invoice turns into a success panel once it is paid and minted)
         Rectangle {
             vertical-stretch: 1;
 
@@ -704,18 +721,54 @@ export component MainApp inherits Window {
                 height: 456px;
                 x: (parent.width - self.width) / 2;
                 y: 14px;
-                background: Nerv.void;
+                background: WalletState.mint-complete ? Nerv.green.with-alpha(0.08) : Nerv.void;
                 border-width: 2px;
-                border-color: Nerv.orange.with-alpha(0.45);
+                border-color: WalletState.mint-complete ? Nerv.green : Nerv.orange.with-alpha(0.45);
 
-                Brackets { x: 0; y: 0; width: parent.width; height: parent.height; tint: Nerv.orange; arm: 20px; weight: 3px; }
+                Brackets {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    tint: WalletState.mint-complete ? Nerv.green : Nerv.orange;
+                    arm: 20px;
+                    weight: 3px;
+                }
 
-                Image {
+                if !WalletState.mint-complete: Image {
                     x: 12px; y: 12px;
                     width: parent.width - 24px; height: parent.height - 24px;
                     source: WalletState.qr-image;
                     image-fit: contain;
                     image-rendering: pixelated;
+                }
+
+                if WalletState.mint-complete: Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    // Built glow: inner frame
+                    Rectangle {
+                        x: 6px; y: 6px;
+                        width: parent.width - 12px; height: parent.height - 12px;
+                        border-width: 1px;
+                        border-color: Nerv.green.with-alpha(0.4);
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 22px;
+                        HorizontalLayout { alignment: center; PixelCheck { tint: Nerv.green; unit: 12px; } }
+                        Text {
+                            text: "+" + WalletState.selected-amount + " SAT";
+                            font-size: 88px;
+                            font-weight: 700;
+                            color: Nerv.green;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "PAYMENT RECEIVED";
+                            font-size: 24px;
+                            font-weight: 700;
+                            letter-spacing: 6px;
+                            color: Nerv.green;
+                            horizontal-alignment: center;
+                        }
+                    }
                 }
             }
 
@@ -725,7 +778,7 @@ export component MainApp inherits Window {
                 text: WalletState.status;
                 font-size: 20px;
                 font-weight: 700;
-                color: Nerv.orange;
+                color: WalletState.mint-complete ? Nerv.green : Nerv.orange;
                 horizontal-alignment: center;
                 vertical-alignment: center;
                 overflow: elide;
@@ -737,27 +790,18 @@ export component MainApp inherits Window {
             padding-right: Nerv.margin;
             padding-top: 4px;
             padding-bottom: Nerv.margin;
-            spacing: 16px;
 
-            if WalletState.show-check-payment: NervButton {
-                width: Nerv.content-w - 16px - 200px;
-                height: 100px;
-                label: "CHECK PAYMENT";
-                accent: Nerv.green;
-                clicked => {
-                    WalletState.status = "CHECKING PAYMENT...";
-                    WalletState.check-mint-payment();
-                }
-            }
             NervButton {
-                width: WalletState.show-check-payment ? 200px : Nerv.content-w;
+                width: Nerv.content-w;
                 height: 100px;
                 label: "DONE";
-                accent: Nerv.standby-text;
+                accent: WalletState.mint-complete ? Nerv.green : Nerv.standby-text;
                 clicked => {
                     WalletState.current-screen = 0;
                     WalletState.qr-ready = false;
-                    WalletState.show-check-payment = false;
+                    WalletState.qr-animated = false;
+                    WalletState.qr-is-invoice = false;
+                    WalletState.mint-complete = false;
                     WalletState.status = "";
                 }
             }
@@ -772,19 +816,44 @@ export component MainApp inherits Window {
             title: "SETTINGS // CONFIG";
             subtitle: "SYS";
             show-back: true;
-            back => { WalletState.current-screen = 0; }
+            back => { WalletState.current-screen = 0; WalletState.status = ""; }
         }
 
         VerticalLayout {
             padding: Nerv.margin;
             spacing: 16px;
 
-            InfoRow { min-height: 148px; vertical-stretch: 1.5; caption: "BALANCE"; value: WalletState.balance + " SAT"; value-size: 72px; value-color: Nerv.green; }
-            InfoRow { min-height: 112px; vertical-stretch: 1; caption: "MINT"; value: WalletState.mint-url; value-size: 32px; }
-            InfoRow { min-height: 112px; vertical-stretch: 1; caption: "SYSTEM"; value: "CASHU PIXEL V0.3.0 // CDK 0.15 // SLINT"; value-size: 20px; value-color: Nerv.standby-text; }
+            InfoRow { min-height: 128px; vertical-stretch: 1.5; caption: "BALANCE"; value: WalletState.balance + " SAT"; value-size: 64px; value-color: Nerv.green; }
+            InfoRow { min-height: 96px; vertical-stretch: 1; caption: "MINT"; value: WalletState.mint-url; value-size: 28px; }
+            InfoRow { min-height: 88px; vertical-stretch: 1; caption: "SYSTEM"; value: "CASHU NERV V0.3.0 // CDK 0.18 // SLINT"; value-size: 20px; value-color: Nerv.standby-text; }
+
+            HorizontalLayout {
+                spacing: 16px;
+                NervButton {
+                    width: Nerv.half-w;
+                    height: 112px;
+                    label: "RECLAIM TOKENS";
+                    hint: "UNCLAIMED SENDS";
+                    label-size: 24px;
+                    accent: Nerv.green;
+                    clicked => {
+                        WalletState.status = "CHECKING SENT TOKENS...";
+                        WalletState.reclaim-tokens();
+                    }
+                }
+                NervButton {
+                    width: Nerv.half-w;
+                    height: 112px;
+                    label: "EXIT TO DESKTOP";
+                    hint: "BACK TO PI HOME";
+                    label-size: 24px;
+                    accent: Nerv.orange;
+                    clicked => { WalletState.exit-app(); }
+                }
+            }
         }
 
-        NervStatusBar { status: ""; }
+        NervStatusBar { status: WalletState.status; }
     }
 
     // ═══ GLOBAL OVERLAY ═══

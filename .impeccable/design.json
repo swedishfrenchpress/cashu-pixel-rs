@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T22:30:00+02:00",
-  "title": "Design System: Cashu Pixel",
+  "generatedAt": "2026-09-26T22:45:00+02:00",
+  "title": "Design System: Cashu NERV",
   "extensions": {
     "colorMeta": {
       "nerv-orange": {
@@ -34,19 +34,19 @@
           "oklch(95% 0.295 142.5)"
         ]
       },
-      "alarm-red": {
+      "unit-01-purple": {
         "role": "tertiary",
-        "displayName": "Alarm Red",
-        "canonical": "#FF2B1D",
+        "displayName": "Unit-01 Purple",
+        "canonical": "#B266FF",
         "tonalRamp": [
-          "oklch(15% 0.244 29.5)",
-          "oklch(26% 0.244 29.5)",
-          "oklch(38% 0.244 29.5)",
-          "oklch(49% 0.244 29.5)",
-          "oklch(61% 0.244 29.5)",
-          "oklch(72% 0.244 29.5)",
-          "oklch(84% 0.244 29.5)",
-          "oklch(95% 0.244 29.5)"
+          "oklch(15% 0.221 303.9)",
+          "oklch(26% 0.221 303.9)",
+          "oklch(38% 0.221 303.9)",
+          "oklch(49% 0.221 303.9)",
+          "oklch(61% 0.221 303.9)",
+          "oklch(72% 0.221 303.9)",
+          "oklch(84% 0.221 303.9)",
+          "oklch(95% 0.221 303.9)"
         ]
       },
       "lightning-amber": {
@@ -171,7 +171,7 @@
       },
       "meta": {
         "displayName": "Meta",
-        "purpose": "Key hints (18px) and the mint host (20px)."
+        "purpose": "Hints under the Home keys."
       }
     },
     "shadows": [],
@@ -188,8 +188,8 @@
       "name": "Channel Key (Send)",
       "kind": "button",
       "refersTo": "channel-key-send",
-      "description": "Home's SEND key: pixel triangle, channel label, one-line hint.",
-      "html": "<button class=\"ds-chkey\" style=\"--c:#FF2B1D\"><span class=\"ds-tri-up\"></span><span class=\"ds-chkey-label\">SEND</span><span class=\"ds-chkey-hint\">ECASH TOKEN AS QR</span></button>",
+      "description": "Home's SEND key in Unit-01 Purple: pixel triangle, channel label, one-line hint.",
+      "html": "<button class=\"ds-chkey\" style=\"--c:#B266FF\"><span class=\"ds-tri-up\"></span><span class=\"ds-chkey-label\">SEND</span><span class=\"ds-chkey-hint\">ECASH TOKEN AS QR</span></button>",
       "css": ".ds-chkey { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; width:328px; height:300px; background:color-mix(in srgb, var(--c) 5%, #000); color:var(--c); border:1px solid color-mix(in srgb, var(--c) 75%, transparent); border-radius:0; font-family:'DejaVu Sans', sans-serif; cursor:pointer; } .ds-tri-up { width:0; height:0; border-left:38px solid transparent; border-right:38px solid transparent; border-bottom:42px solid var(--c); } .ds-chkey-label { font-size:40px; font-weight:700; letter-spacing:6px; } .ds-chkey-hint { font-size:18px; } .ds-chkey:hover, .ds-chkey:focus-visible { outline:1px solid color-mix(in srgb, var(--c) 40%, transparent); outline-offset:-7px; } .ds-chkey:active { background:color-mix(in srgb, var(--c) 20%, #000); border:3px solid var(--c); }"
     },
     {
@@ -236,9 +236,9 @@
       "name": "Balance Readout",
       "kind": "card",
       "refersTo": "readout",
-      "description": "Home's balance: Display sats with a baseline unit, inside a built green double frame with brackets.",
-      "html": "<div class=\"ds-balance\"><div class=\"ds-balance-cap\">BALANCE</div><div class=\"ds-balance-val\">22<span>SAT</span></div><div class=\"ds-balance-mint\">MINT // mint.minibits.cash</div></div>",
-      "css": ".ds-balance { width:672px; height:236px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; border:1px solid rgba(0,255,0,0.35); box-shadow:inset 0 0 0 4px #000, inset 0 0 0 5px rgba(0,255,0,0.12); font-family:'DejaVu Sans', sans-serif; } .ds-balance-cap { font-size:20px; font-weight:700; letter-spacing:8px; color:#FF9900; } .ds-balance-val { font-size:112px; font-weight:700; line-height:1.1; color:#00FF00; } .ds-balance-val span { font-size:40px; margin-left:18px; } .ds-balance-mint { font-size:20px; color:#838383; }"
+      "description": "Home's balance: Display sats with a baseline unit, inside a built green double frame. No mint line.",
+      "html": "<div class=\"ds-balance\"><div class=\"ds-balance-cap\">BALANCE</div><div class=\"ds-balance-val\">22<span>SAT</span></div></div>",
+      "css": ".ds-balance { width:672px; height:236px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; border:1px solid rgba(0,255,0,0.35); box-shadow:inset 0 0 0 4px #000, inset 0 0 0 5px rgba(0,255,0,0.12); font-family:'DejaVu Sans', sans-serif; } .ds-balance-cap { font-size:20px; font-weight:700; letter-spacing:8px; color:#FF9900; } .ds-balance-val { font-size:112px; font-weight:700; line-height:1.1; color:#00FF00; } .ds-balance-val span { font-size:40px; margin-left:18px; }"
     },
     {
       "name": "Status Bar",
@@ -258,7 +258,7 @@
   ],
   "narrative": {
     "northStar": "The MAGI Readout",
-    "overview": "The wallet is a monitor in NERV's command centre: a black glass field on which the system reports state. Nothing here decorates for its own sake. Frames, bracket corners, and scanlines exist to make the screen read as an instrument, and every number on it (balance, amount, invoice) reads as a live readout. The mood is urgent, precise, and cinematic: a live operation, where every value matters and every action is announced.\n\nThe system runs quiet structure with loud channels. Structure sits back in low-strength hairlines, while channels (send, receive, Lightning, Bluetooth) carry saturated alarm colour. Controls feel like an alarm panel: loud, colour-coded, unmistakable, and big enough for a stranger's thumb. At rest the screen is flat. Under a finger, or when selected, a control lights up like an indicator on a console.\n\nThe system is designed natively for one physical object: the 72 × 72 mm HyperPixel 4.0 Square at about 254 PPI. Every size is chosen in millimetres (10px ≈ 1mm), never in desktop pixels. It has one column, no scrolling, and touch only. It must never read as a generic crypto dashboard (gradients, glassy cards, purple-blue fintech sheen, coin logos) or be assembled from stock OS widgets (Material, Fluent, or Cupertino controls).",
+    "overview": "The wallet is a monitor in NERV's command centre: a black glass field on which the system reports state. Nothing here decorates for its own sake. Frames, bracket corners, and scanlines exist to make the screen read as an instrument, and every number on it (balance, amount, invoice) reads as a live readout. The mood is urgent, precise, and cinematic: a live operation, where every value matters and every action is announced.\n\nThe system runs quiet structure with loud channels. Structure sits back in low-strength hairlines, while channels (send, receive, Lightning, Bluetooth) carry saturated alarm colour. Controls feel like an alarm panel: loud, colour-coded, unmistakable, and big enough for a stranger's thumb. At rest the screen is flat. Under a finger, or when selected, a control lights up like an indicator on a console.\n\nThe system is designed natively for one physical object: the 72 × 72 mm HyperPixel 4.0 Square at about 254 PPI. Every size is chosen in millimetres (10px ≈ 1mm), never in desktop pixels. It has one column, no scrolling, and touch only. It must never read as a generic crypto dashboard (gradients, glassy cards, purple-to-blue fintech sheen, coin logos) or be assembled from stock OS widgets (Material, Fluent, or Cupertino controls).",
     "keyCharacteristics": [
       "The whole square is used. Each screen is one full-height stack: header, readout, controls, action, status.",
       "One saturated channel colour per function; orange is the system's own voice.",
@@ -269,12 +269,12 @@
     "rules": [
       {
         "name": "The Channel Rule",
-        "body": "Every function owns exactly one colour, and nothing else wears it: SEND is red, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.",
+        "body": "Every function owns exactly one colour, and nothing else wears it: SEND is purple, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.",
         "section": "colors"
       },
       {
         "name": "The Green Means Sats Rule",
-        "body": "Phosphor Green is reserved for sat amounts, receiving, and success. An amount is green even on the red Send screen.",
+        "body": "Phosphor Green is reserved for sat amounts, receiving, and success. An amount is green even on the purple Send screen.",
         "section": "colors"
       },
       {
@@ -323,7 +323,7 @@
       "Don't use `drop-shadow-*`; the software renderer draws nothing.",
       "Don't round a corner, introduce a circle, or use a text glyph (◄, ▶, ✓) as an icon. Draw stepped pixel icons from rectangles.",
       "Don't import `std-widgets.slint` or any Material, Fluent, or Cupertino control.",
-      "Don't use gradients, glass or blur, purple-blue fintech colour, or coin logos.",
+      "Don't use gradients, glass or blur, purple-to-blue fintech sheen, or coin logos. Unit-01 Purple is a flat channel colour for SEND only.",
       "Don't let Pattern Blue stand for anything but Bluetooth, or any channel colour stand for a different function.",
       "Don't set text in Standby Gray (#555555); use Standby Text (#838383).",
       "Don't name a Slint component property `color` on anything that inherits `Rectangle`; it collides with a deprecated built-in and fails the build. Use `tint`."

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" shape-rendering="crispEdges">
+  <!-- Cashu NERV app icon: void field, orange frame and brackets, SEND (purple) and RECEIVE (green) pixel triangles -->
+  <rect width="64" height="64" fill="#000000"/>
+  <rect x="4.5" y="4.5" width="55" height="55" fill="none" stroke="#FF9900" stroke-opacity="0.5"/>
+  <g fill="#FF9900">
+    <rect x="2" y="2" width="14" height="4"/><rect x="2" y="2" width="4" height="14"/>
+    <rect x="48" y="2" width="14" height="4"/><rect x="58" y="2" width="4" height="14"/>
+    <rect x="2" y="58" width="14" height="4"/><rect x="2" y="48" width="4" height="14"/>
+    <rect x="48" y="58" width="14" height="4"/><rect x="58" y="48" width="4" height="14"/>
+  </g>
+  <g fill="#B266FF">
+    <rect x="18" y="23" width="4" height="4"/>
+    <rect x="14" y="27" width="12" height="4"/>
+    <rect x="10" y="31" width="20" height="4"/>
+    <rect x="6" y="35" width="28" height="4"/>
+  </g>
+  <g fill="#00FF00">
+    <rect x="30" y="25" width="28" height="4"/>
+    <rect x="34" y="29" width="20" height="4"/>
+    <rect x="38" y="33" width="12" height="4"/>
+    <rect x="42" y="37" width="4" height="4"/>
+  </g>
+</svg>

@@ -1,10 +1,10 @@
 ---
-name: Cashu Pixel
+name: Cashu NERV
 description: A NERV command-monitor interface for a Cashu ecash wallet, laid out in millimetres for the 720×720 HyperPixel 4.0 Square.
 colors:
   nerv-orange: "#FF9900"
   phosphor-green: "#00FF00"
-  alarm-red: "#FF2B1D"
+  unit-01-purple: "#B266FF"
   lightning-amber: "#FFAA00"
   pattern-blue: "#00F6FF"
   void-black: "#000000"
@@ -56,8 +56,8 @@ spacing:
   gutter: "24px"
 components:
   channel-key-send:
-    backgroundColor: "#FF2B1D0D"
-    textColor: "{colors.alarm-red}"
+    backgroundColor: "#B266FF0D"
+    textColor: "{colors.unit-01-purple}"
     typography: "{typography.channel}"
     rounded: "{rounded.none}"
     width: "328px"
@@ -116,7 +116,7 @@ components:
     height: "44px"
 ---
 
-# Design System: Cashu Pixel
+# Design System: Cashu NERV
 
 ## Overview
 
@@ -126,7 +126,7 @@ The wallet is a monitor in NERV's command centre: a black glass field on which t
 
 The system runs quiet structure with loud channels. Structure sits back in low-strength hairlines, while channels (send, receive, Lightning, Bluetooth) carry saturated alarm colour. Controls feel like an **alarm panel**: loud, colour-coded, unmistakable, and big enough for a stranger's thumb. At rest the screen is flat. Under a finger, or when selected, a control lights up like an indicator on a console.
 
-The system is designed natively for one physical object: the 72 × 72 mm HyperPixel 4.0 Square at about 254 PPI. **Every size is chosen in millimetres (10px ≈ 1mm)**, never in desktop pixels. It has one column, no scrolling, and touch only. It must never read as a **generic crypto dashboard** (gradients, glassy cards, purple-blue fintech sheen, coin logos) or be assembled from **stock OS widgets** (Material, Fluent, or Cupertino controls).
+The system is designed natively for one physical object: the 72 × 72 mm HyperPixel 4.0 Square at about 254 PPI. **Every size is chosen in millimetres (10px ≈ 1mm)**, never in desktop pixels. It has one column, no scrolling, and touch only. It must never read as a **generic crypto dashboard** (gradients, glassy cards, purple-to-blue fintech sheen, coin logos) or be assembled from **stock OS widgets** (Material, Fluent, or Cupertino controls).
 
 **Key Characteristics:**
 - The whole square is used. Each screen is one full-height stack: header, readout, controls, action, status.
@@ -143,10 +143,10 @@ A black field under saturated signal colours, with each colour bound to one mean
 - **NERV Orange** (#FF9900): the system's own voice. Home and Settings headers, settings rows, the QR frame and its brackets, the idle status accent, and the scanlines. When nothing else claims a surface, it is orange.
 
 ### Secondary
-- **Phosphor Green** (#00FF00): value. The balance, every selected-amount readout (on the red Send screen too), the RECEIVE channel, CHECK PAYMENT, and success states.
+- **Phosphor Green** (#00FF00): value. The balance, every selected-amount readout (on the purple Send screen too), the RECEIVE channel, RECLAIM TOKENS, and success states (the paid-invoice panel).
 
 ### Tertiary
-- **Alarm Red** (#FF2B1D): the SEND channel. Its home key, header bar, keypad, and CREATE TOKEN QR.
+- **Unit-01 Purple** (#B266FF): the SEND channel. Its home key, header bar, keypad, CREATE TOKEN QR, and the token QR header. Paired with Phosphor Green on Home, it echoes Evangelion Unit-01. It is a flat, luminous violet (6.2:1 on black), never a purple-to-blue gradient.
 - **Lightning Amber** (#FFAA00): the Lightning mint channel. The Receive keypad and readout frame, CREATE LIGHTNING INVOICE, and the invoice QR header.
 - **Pattern Blue** (#00F6FF): Bluetooth, and only Bluetooth. The scan banner in its active state.
 
@@ -154,12 +154,12 @@ A black field under saturated signal colours, with each colour bound to one mean
 - **Void Black** (#000000): the field. Every screen background, key fill, and panel fill.
 - **Console Black** (#0A0A0A): chrome. Header bar, status bar, and scan banner. The only tonal step in the system.
 - **Standby Gray** (#555555): inactive marks only. Disabled frames and brackets, and the idle status indicator. It is never used for text: at 2.8:1 on black it is unreadable.
-- **Standby Text** (#838383): inactive and secondary text at 5.2:1. The idle "SYSTEM READY", placeholders, disabled labels, header subtitles, the mint host, the SETTINGS header action, and DONE.
+- **Standby Text** (#838383): inactive and secondary text at 5.2:1. The idle "SYSTEM READY", placeholders, disabled labels, header subtitles, the SETTINGS header action, and DONE.
 
 ### Named Rules
-**The Channel Rule.** Every function owns exactly one colour, and nothing else wears it: SEND is red, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.
+**The Channel Rule.** Every function owns exactly one colour, and nothing else wears it: SEND is purple, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.
 
-**The Green Means Sats Rule.** Phosphor Green is reserved for sat amounts, receiving, and success. An amount is green even on the red Send screen.
+**The Green Means Sats Rule.** Phosphor Green is reserved for sat amounts, receiving, and success. An amount is green even on the purple Send screen.
 
 **The Strength Ladder Rule.** Colours sit on black at stepped strengths, never as blended mid-tones:
 - text at 85–100%
@@ -179,10 +179,10 @@ A black field under saturated signal colours, with each colour bound to one mean
 - **Headline** (700, 64px): the selected-amount readout on Receive and Send. Settings uses a 72px variant for the balance.
 - **Keypad** (700, 44px): amount keys (21, 100, 1K…).
 - **Channel** (700, 40px, 6px tracking): SEND and RECEIVE on the Home keys.
-- **Action** (700, 28px, 2px tracking): primary action labels (CREATE LIGHTNING INVOICE, CHECK PAYMENT, DONE).
+- **Action** (700, 28px, 2px tracking): primary action labels (CREATE LIGHTNING INVOICE, CREATE TOKEN QR, DONE).
 - **Title** (700, 24px): screen header titles ("RECEIVE // INCOMING").
 - **Caption** (700, 18px, 2px tracking): readout captions, status bar text, banner text, and header subtitles.
-- **Meta** (400, 18–20px): hints under the Home keys (18px) and the mint host (20px).
+- **Meta** (400, 18px): hints under the Home keys.
 
 Units ("SAT") sit on the number's baseline. Because the two sizes differ, the unit is lifted by 0.236 × (number size − unit size), DejaVu's descent.
 
@@ -204,8 +204,8 @@ The controls stretch to fill whatever the fixed parts leave, so no screen ends i
 
 - **Home:** a 236px balance readout, then SEND and RECEIVE as two equal keys, each 328px wide, filling the rest (about 33 × 30 mm). Settings lives in the header, as a 176px action on the right.
 - **Receive and Send:** a 112px amount readout, then a 3×2 keypad of 216px-wide keys that stretch vertically (114px on Receive, 148px on Send), then a 112px full-width action. Receive adds the 52px Bluetooth banner at the bottom.
-- **QR:** a 456px framed code, centred, with a 40px status line under it. Below that, CHECK PAYMENT (456px) and DONE (200px), both 100px tall; DONE goes full width when there is no payment to check.
-- **Settings:** three info rows that share the height at 1.5 : 1 : 1.
+- **QR:** a 456px framed code, centred, with a 40px status line under it, then a full-width 100px DONE. There is no manual payment check: a paid invoice turns into the success panel on its own.
+- **Settings:** three info rows that share the height at 1.5 : 1 : 1, then two 112px actions side by side: RECLAIM TOKENS (Phosphor Green) and EXIT TO DESKTOP (NERV Orange), both 24px labels with a Meta hint.
 
 Touch targets are 80px (8mm) or larger everywhere; the smallest is the 104 × 72px header back key.
 
@@ -229,7 +229,7 @@ Square everything: zero corner radius on every surface and control. Every geomet
 - 1px hairline frames and rules
 - bracket corners marking lead elements, at three scales: 12 × 2px on amount keys, and 20 × 3px on the Home keys, the balance panel, and the QR frame
 - 6px channel bars on the left edge of headers, buttons, readouts, and the status bar
-- **stepped pixel icons**: triangles built from stacked rectangles (▲ for SEND, ▼ for RECEIVE), and a stepped head plus a shaft for the back arrow
+- **stepped pixel icons**: triangles built from stacked rectangles (▲ for SEND, ▼ for RECEIVE), a stepped head plus a shaft for the back arrow, and a stepped check mark of 2×2-unit cells for success
 - small solid squares (8–10px) as indicators
 
 There are no circles and no text glyphs standing in for icons.
@@ -266,7 +266,7 @@ Character: **alarm-panel channels on a quiet instrument frame.** Channel control
 ### Readout
 - **Balance panel:**
   - 236px tall, with a green frame at 35%, a resting inner frame at 12%, and 20 × 3px green brackets
-  - an orange Caption "BALANCE" at 8px tracking, over the Display balance with a baseline-aligned 40px "SAT", over the mint host in Meta
+  - an orange Caption "BALANCE" at 8px tracking, over the Display balance with a baseline-aligned 40px "SAT". Nothing else: the mint is shown in Settings, not on Home
 - **Amount readout:** a 112px black cell with a 45% channel frame and a 6px channel bar.
   - A Caption at the top-left ("MINT AMOUNT", "SEND AMOUNT") and an optional Caption aside at the top-right ("AVAILABLE 22 SAT").
   - Below them, "SELECT AN AMOUNT BELOW" in 24px Standby Text, or the Headline amount with a baseline-aligned 28px "SAT".
@@ -284,7 +284,10 @@ Character: **alarm-panel channels on a quiet instrument frame.** Channel control
 ### QR Frame (signature)
 - A 456px black square with a 2px orange frame at 45% and 20 × 3px full-strength brackets.
 - The code fills it with pixelated (nearest-neighbour) scaling so modules stay crisp.
-- The code itself is inverted: light modules on black.
+- The code is standard polarity, dark modules on a white field with a 4-module quiet zone. Inverted codes fail on many phone scanners.
+- Tokens over 320 characters animate (NUT-16): 100-byte frames at 5 per second, and the status line says "ANIMATED QR".
+- The header names what the code is: "INVOICE // LIGHTNING" (Lightning Amber, with an "AWAITING PAYMENT" subtitle) or "TOKEN // ECASH" (Unit-01 Purple).
+- **Paid:** once an invoice is paid and minted, the frame turns Phosphor Green, with a 1px inner frame and an 8% tint. It shows a stepped pixel check, "+21 SAT" at 88px, and "PAYMENT RECEIVED" as a 24px caption. The header becomes "INVOICE // PAID", the status line shows the new balance, and DONE turns green.
 
 ## Do's and Don'ts
 
@@ -303,7 +306,7 @@ Character: **alarm-panel channels on a quiet instrument frame.** Channel control
 - **Don't** use `drop-shadow-*`; the software renderer draws nothing.
 - **Don't** round a corner, introduce a circle, or use a text glyph (◄, ▶, ✓) as an icon. Draw stepped pixel icons from rectangles.
 - **Don't** import `std-widgets.slint` or any Material, Fluent, or Cupertino control.
-- **Don't** use gradients, glass or blur, purple-blue fintech colour, or coin logos.
+- **Don't** use gradients, glass or blur, purple-to-blue fintech sheen, or coin logos. Unit-01 Purple is a flat channel colour for SEND only.
 - **Don't** let Pattern Blue stand for anything but Bluetooth, or any channel colour stand for a different function.
 - **Don't** set text in Standby Gray (#555555); use Standby Text (#838383).
 - **Don't** name a Slint component property `color` on anything that inherits `Rectangle`; it collides with a deprecated built-in and fails the build. Use `tint`.
