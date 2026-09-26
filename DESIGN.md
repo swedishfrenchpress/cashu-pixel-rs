@@ -143,11 +143,11 @@ A black field under saturated signal colours, with each colour bound to one mean
 - **NERV Orange** (#FF9900): the system's own voice. Home and Settings headers, settings rows, the QR frame and its brackets, the idle status accent, and the scanlines. When nothing else claims a surface, it is orange.
 
 ### Secondary
-- **Phosphor Green** (#00FF00): value. The balance, every selected-amount readout (on the purple Send screen too), the RECEIVE channel, RECLAIM TOKENS, and success states (the paid-invoice panel).
+- **Phosphor Green** (#00FF00): value and receiving. The balance, every selected-amount readout (on the purple Send screen too), the RECEIVE channel (its keypad, readout, and CREATE PAYMENT QR), the CASHU toggle key, RECLAIM TOKENS, and success states (the paid panel).
 
 ### Tertiary
 - **Unit-01 Purple** (#B266FF): the SEND channel. Its home key, header bar, keypad, CREATE TOKEN QR, and the token QR header. Paired with Phosphor Green on Home, it echoes Evangelion Unit-01. It is a flat, luminous violet (6.2:1 on black), never a purple-to-blue gradient.
-- **Lightning Amber** (#FFAA00): the Lightning mint channel. The Receive keypad and readout frame, CREATE LIGHTNING INVOICE, and the invoice QR header.
+- **Lightning Amber** (#FFAA00): Lightning. The LIGHTNING toggle key and the "RECEIVE // LIGHTNING" QR header.
 - **Pattern Blue** (#00F6FF): Bluetooth, and only Bluetooth. The scan banner in its active state.
 
 ### Neutral
@@ -286,8 +286,9 @@ Character: **alarm-panel channels on a quiet instrument frame.** Channel control
 - The code fills it with pixelated (nearest-neighbour) scaling so modules stay crisp.
 - The code is standard polarity, dark modules on a white field with a 4-module quiet zone. Inverted codes fail on many phone scanners.
 - Tokens over 320 characters animate (NUT-16): 100-byte frames at 5 per second, and the status line says "ANIMATED QR".
-- The header names what the code is: "INVOICE // LIGHTNING" (Lightning Amber, with an "AWAITING PAYMENT" subtitle) or "TOKEN // ECASH" (Unit-01 Purple).
-- **Paid:** once an invoice is paid and minted, the frame turns Phosphor Green, with a 1px inner frame and an 8% tint. It shows a stepped pixel check, "+21 SAT" at 88px, and "PAYMENT RECEIVED" as a 24px caption. The header becomes "INVOICE // PAID", the status line shows the new balance, and DONE turns green.
+- The header names what the code is: "RECEIVE // LIGHTNING" (Lightning Amber) or "RECEIVE // CASHU" (Phosphor Green), both with an "AWAITING PAYMENT" subtitle, or "TOKEN // ECASH" (Unit-01 Purple).
+- While a receive request is open, the bottom row is a LIGHTNING | CASHU toggle: two 236px amount-key-style segments with 24px labels, where the selected one is lit. DONE sits beside them at 168px. The scan hint under the code follows the toggle ("SCAN WITH A LIGHTNING WALLET" or "SCAN WITH A CASHU WALLET").
+- **Paid:** once an invoice is paid and minted, the frame turns Phosphor Green, with a 1px inner frame and an 8% tint. It shows a stepped pixel check, "+21 SAT" at 88px, and "PAYMENT RECEIVED" as a 24px caption. The header becomes "RECEIVE // PAID", the status line shows the new balance, and DONE turns green.
 
 ## Do's and Don'ts
 

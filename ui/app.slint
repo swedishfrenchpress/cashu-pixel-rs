@@ -180,6 +180,7 @@ component ChannelKey inherits Rectangle {
 // ─── AMOUNT KEY ───
 component AmountKey inherits Rectangle {
     in property <string> label;
+    in property <length> label-size: 44px;
     in property <bool> selected: false;
     in property <bool> enabled: true;
     in property <color> accent: Nerv.orange;
@@ -210,7 +211,7 @@ component AmountKey inherits Rectangle {
     Text {
         x: 0; y: 0; width: parent.width; height: parent.height;
         text: label;
-        font-size: 44px;
+        font-size: root.label-size;
         font-weight: 700;
         color: !enabled ? Nerv.standby-text : lit ? accent : accent.with-alpha(0.9);
         horizontal-alignment: center;
@@ -459,10 +460,15 @@ export global WalletState {
     in-out property <bool> qr-animated: false;
     in-out property <bool> qr-is-invoice: false;
     in-out property <bool> mint-complete: false;
+    // Receive screen: which QR is shown (Lightning invoice or Cashu payment request)
+    in-out property <bool> receive-cashu: false;
+    in-out property <bool> request-available: false;
+    in-out property <image> request-image;
+    in-out property <int> received-amount: 0;
     in-out property <int> current-screen: 0;
     // 0=home, 1=receive(mint+ble), 2=send, 4=qr, 5=settings
 
-    callback request-mint-quote(int);
+    callback request-payment(int);
     callback request-send(int);
     callback start-receive();
     callback exit-app();
@@ -563,7 +569,7 @@ export component MainApp inherits Window {
                 ChannelKey {
                     width: Nerv.half-w;
                     label: "RECEIVE";
-                    hint: "MINT VIA LIGHTNING";
+                    hint: "LIGHTNING OR CASHU";
                     accent: Nerv.green;
                     icon-dir: 1;
                     clicked => {
@@ -585,7 +591,7 @@ export component MainApp inherits Window {
 
         NervHeader {
             title: "RECEIVE // INCOMING";
-            subtitle: "LIGHTNING";
+            subtitle: "LN + CASHU";
             accent: Nerv.green;
             show-back: true;
             back => { WalletState.current-screen = 0; WalletState.status = ""; }
@@ -596,32 +602,32 @@ export component MainApp inherits Window {
             padding-bottom: 16px;
             spacing: 16px;
 
-            AmountReadout { amount: root.amount; accent: Nerv.amber; caption: "MINT AMOUNT"; }
+            AmountReadout { amount: root.amount; accent: Nerv.green; caption: "RECEIVE AMOUNT"; }
 
             GridLayout {
                 spacing: Nerv.gap;
                 vertical-stretch: 1;
                 Row {
-                    AmountKey { label: "21"; accent: Nerv.amber; selected: root.amount == 21; clicked => { WalletState.selected-amount = 21; WalletState.status = ""; } }
-                    AmountKey { label: "100"; accent: Nerv.amber; selected: root.amount == 100; clicked => { WalletState.selected-amount = 100; WalletState.status = ""; } }
-                    AmountKey { label: "500"; accent: Nerv.amber; selected: root.amount == 500; clicked => { WalletState.selected-amount = 500; WalletState.status = ""; } }
+                    AmountKey { label: "21"; accent: Nerv.green; selected: root.amount == 21; clicked => { WalletState.selected-amount = 21; WalletState.status = ""; } }
+                    AmountKey { label: "100"; accent: Nerv.green; selected: root.amount == 100; clicked => { WalletState.selected-amount = 100; WalletState.status = ""; } }
+                    AmountKey { label: "500"; accent: Nerv.green; selected: root.amount == 500; clicked => { WalletState.selected-amount = 500; WalletState.status = ""; } }
                 }
                 Row {
-                    AmountKey { label: "1K"; accent: Nerv.amber; selected: root.amount == 1000; clicked => { WalletState.selected-amount = 1000; WalletState.status = ""; } }
-                    AmountKey { label: "5K"; accent: Nerv.amber; selected: root.amount == 5000; clicked => { WalletState.selected-amount = 5000; WalletState.status = ""; } }
-                    AmountKey { label: "10K"; accent: Nerv.amber; selected: root.amount == 10000; clicked => { WalletState.selected-amount = 10000; WalletState.status = ""; } }
+                    AmountKey { label: "1K"; accent: Nerv.green; selected: root.amount == 1000; clicked => { WalletState.selected-amount = 1000; WalletState.status = ""; } }
+                    AmountKey { label: "5K"; accent: Nerv.green; selected: root.amount == 5000; clicked => { WalletState.selected-amount = 5000; WalletState.status = ""; } }
+                    AmountKey { label: "10K"; accent: Nerv.green; selected: root.amount == 10000; clicked => { WalletState.selected-amount = 10000; WalletState.status = ""; } }
                 }
             }
 
             NervButton {
-                label: "CREATE LIGHTNING INVOICE";
-                accent: Nerv.amber;
+                label: "CREATE PAYMENT QR";
+                accent: Nerv.green;
                 height: 112px;
                 enabled: root.amount > 0;
                 clicked => {
                     if root.amount > 0 {
-                        WalletState.status = "GENERATING INVOICE...";
-                        WalletState.request-mint-quote(root.amount);
+                        WalletState.status = "GENERATING PAYMENT QR...";
+                        WalletState.request-payment(root.amount);
                     } else {
                         WalletState.status = "SELECT AN AMOUNT FIRST";
                     }
@@ -698,9 +704,12 @@ export component MainApp inherits Window {
         spacing: 0;
 
         NervHeader {
-            title: !WalletState.qr-is-invoice ? "TOKEN // ECASH" : WalletState.mint-complete ? "INVOICE // PAID" : "INVOICE // LIGHTNING";
+            title: !WalletState.qr-is-invoice ? "TOKEN // ECASH"
+                : WalletState.mint-complete ? "RECEIVE // PAID"
+                : WalletState.receive-cashu ? "RECEIVE // CASHU" : "RECEIVE // LIGHTNING";
             subtitle: WalletState.qr-is-invoice && !WalletState.mint-complete ? "AWAITING PAYMENT" : "";
-            accent: !WalletState.qr-is-invoice ? Nerv.purple : WalletState.mint-complete ? Nerv.green : Nerv.amber;
+            accent: !WalletState.qr-is-invoice ? Nerv.purple
+                : WalletState.mint-complete || WalletState.receive-cashu ? Nerv.green : Nerv.amber;
             show-back: true;
             back => {
                 WalletState.current-screen = 0;
@@ -708,6 +717,7 @@ export component MainApp inherits Window {
                 WalletState.qr-animated = false;
                 WalletState.qr-is-invoice = false;
                 WalletState.mint-complete = false;
+                WalletState.receive-cashu = false;
                 WalletState.status = "";
             }
         }
@@ -735,7 +745,7 @@ export component MainApp inherits Window {
                 if !WalletState.mint-complete: Image {
                     x: 12px; y: 12px;
                     width: parent.width - 24px; height: parent.height - 24px;
-                    source: WalletState.qr-image;
+                    source: WalletState.qr-is-invoice && WalletState.receive-cashu ? WalletState.request-image : WalletState.qr-image;
                     image-fit: contain;
                     image-rendering: pixelated;
                 }
@@ -754,7 +764,7 @@ export component MainApp inherits Window {
                         spacing: 22px;
                         HorizontalLayout { alignment: center; PixelCheck { tint: Nerv.green; unit: 12px; } }
                         Text {
-                            text: "+" + WalletState.selected-amount + " SAT";
+                            text: "+" + WalletState.received-amount + " SAT";
                             font-size: 88px;
                             font-weight: 700;
                             color: Nerv.green;
@@ -775,7 +785,10 @@ export component MainApp inherits Window {
             Text {
                 x: Nerv.margin; y: qr-frame.y + qr-frame.height + 8px;
                 width: Nerv.content-w; height: 40px;
-                text: WalletState.status;
+                // Rust leaves status empty while waiting, so the hint follows the toggle
+                text: WalletState.status != "" || !WalletState.qr-is-invoice || WalletState.mint-complete ? WalletState.status
+                    : WalletState.receive-cashu ? "SCAN WITH A CASHU WALLET // PAY " + WalletState.selected-amount + " SAT"
+                    : "SCAN WITH A LIGHTNING WALLET // PAY " + WalletState.selected-amount + " SAT";
                 font-size: 20px;
                 font-weight: 700;
                 color: WalletState.mint-complete ? Nerv.green : Nerv.orange;
@@ -790,9 +803,33 @@ export component MainApp inherits Window {
             padding-right: Nerv.margin;
             padding-top: 4px;
             padding-bottom: Nerv.margin;
+            spacing: 16px;
 
+            if WalletState.qr-is-invoice && !WalletState.mint-complete: AmountKey {
+                width: 236px;
+                label: "LIGHTNING";
+                label-size: 24px;
+                accent: Nerv.amber;
+                selected: !WalletState.receive-cashu;
+                clicked => { WalletState.receive-cashu = false; }
+            }
+            if WalletState.qr-is-invoice && !WalletState.mint-complete: AmountKey {
+                width: 236px;
+                label: "CASHU";
+                label-size: 24px;
+                accent: Nerv.green;
+                enabled: WalletState.request-available;
+                selected: WalletState.receive-cashu;
+                clicked => {
+                    if self.enabled {
+                        WalletState.receive-cashu = true;
+                    } else {
+                        WalletState.status = "CASHU REQUEST UNAVAILABLE // USE LIGHTNING";
+                    }
+                }
+            }
             NervButton {
-                width: Nerv.content-w;
+                width: WalletState.qr-is-invoice && !WalletState.mint-complete ? 168px : Nerv.content-w;
                 height: 100px;
                 label: "DONE";
                 accent: WalletState.mint-complete ? Nerv.green : Nerv.standby-text;
@@ -802,6 +839,7 @@ export component MainApp inherits Window {
                     WalletState.qr-animated = false;
                     WalletState.qr-is-invoice = false;
                     WalletState.mint-complete = false;
+                    WalletState.receive-cashu = false;
                     WalletState.status = "";
                 }
             }

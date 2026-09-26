@@ -1,12 +1,20 @@
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use cdk::mint_url::MintUrl;
 use cdk::nuts::CurrencyUnit;
 use cdk::nuts::nut00::PaymentMethod;
-use cdk::nuts::{MintQuoteState, TokenUrEncoder};
-use cdk::wallet::{SendOptions, Wallet};
+use cdk::nuts::{
+    MintQuoteState, PaymentRequest, PaymentRequestPayload, Token, TokenUrEncoder, Transport,
+    TransportType,
+};
+use cdk::wallet::{ReceiveOptions, SendOptions, Wallet};
 use cdk::Amount;
+use nostr_sdk::nips::nip19::Nip19Profile;
+use nostr_sdk::{Client, Filter, Keys, Kind, RelayPoolNotification, RelayUrl, ToBech32};
 use slint::{Rgb8Pixel, SharedPixelBuffer, SharedString};
 use tokio::sync::Mutex;
 
@@ -23,6 +31,13 @@ const UR_FRAGMENT_LEN: usize = 100;
 const QR_FRAME_MS: u64 = 200;
 /// How often an open invoice is checked for payment.
 const PAYMENT_POLL_MS: u64 = 2000;
+/// Relays a payer's wallet uses to deliver ecash for a Cashu payment request (NUT-18).
+const NOSTR_RELAYS: [&str; 2] = ["wss://relay.damus.io", "wss://nos.lol"];
+/// How long a receive request is watched when the mint gives no invoice expiry.
+const RECEIVE_TTL_SECS: u64 = 600;
+
+/// Each receive screen starts a new session; watchers of an older session stop.
+static RECEIVE_SESSION: AtomicU64 = AtomicU64::new(0);
 
 struct AppWallet {
     wallet: Wallet,
@@ -50,6 +65,115 @@ fn qr_pixels(data: &str) -> Result<SharedPixelBuffer<Rgb8Pixel>, String> {
         }
     }
     Ok(buf)
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// Build a NUT-18 Cashu payment request for `amount` sat from our mint, delivered over
+/// Nostr to a fresh key. Returns the encoded request (`creqA…`) and the key to listen with.
+fn cashu_request(amount: u64) -> Result<(String, Keys), String> {
+    let keys = Keys::generate();
+    let relays = NOSTR_RELAYS.iter().filter_map(|r| RelayUrl::parse(r).ok());
+    let nprofile = Nip19Profile::new(keys.public_key(), relays)
+        .to_bech32()
+        .map_err(|e| e.to_string())?;
+    let transport = Transport::builder()
+        .transport_type(TransportType::Nostr)
+        .target(nprofile)
+        .add_tag(vec!["n".to_string(), "17".to_string()])
+        .build()
+        .map_err(|e| e.to_string())?;
+    let request = PaymentRequest::builder()
+        .payment_id(format!("{:08x}", rand::random::<u32>()))
+        .amount(amount)
+        .unit(CurrencyUnit::Sat)
+        .single_use(true)
+        .add_mint(MintUrl::from_str(MINT_URL).map_err(|e| e.to_string())?)
+        .description("Cashu NERV")
+        .add_transport(transport)
+        .build();
+    Ok((request.to_string(), keys))
+}
+
+/// Show the paid state on the receive screen, however the payment arrived.
+fn show_received(ui_w: &slint::Weak<MainApp>, received: u64, balance: u64) {
+    update_ui(ui_w, move |ui| {
+        let state = ui.global::<WalletState>();
+        state.set_balance(SharedString::from(format!("{}", balance)));
+        state.set_received_amount(received as i32);
+        state.set_mint_complete(true);
+        state.set_status(SharedString::from(format!("NEW BALANCE {} SAT", balance)));
+    });
+}
+
+/// Listen on Nostr for ecash sent to a Cashu payment request and receive it into the wallet.
+/// Stops once the session is paid (either way), replaced by a newer one, or past `deadline`.
+async fn watch_cashu_request(
+    keys: Keys,
+    session: u64,
+    paid: Arc<AtomicBool>,
+    deadline: u64,
+    wallet_ref: Arc<Mutex<Option<AppWallet>>>,
+    ui_w: slint::Weak<MainApp>,
+) {
+    let pubkey = keys.public_key();
+    let client = Client::new(keys);
+    for relay in NOSTR_RELAYS {
+        let _ = client.add_read_relay(relay).await;
+    }
+    client.connect().await;
+    let mut notifications = client.notifications();
+    if client.subscribe(Filter::new().pubkey(pubkey).kind(Kind::GiftWrap), None).await.is_err() {
+        client.shutdown().await;
+        return;
+    }
+    let our_mint = MintUrl::from_str(MINT_URL).ok();
+
+    while !paid.load(Ordering::SeqCst)
+        && RECEIVE_SESSION.load(Ordering::SeqCst) == session
+        && now_secs() < deadline
+    {
+        let event = match tokio::time::timeout(Duration::from_secs(2), notifications.recv()).await {
+            Ok(Ok(RelayPoolNotification::Event { event, .. })) => event,
+            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
+            // Timeout (re-check the stop conditions), lag, or a non-event notification
+            _ => continue,
+        };
+        let Ok(gift) = client.unwrap_gift_wrap(&event).await else { continue };
+        let Ok(payload) = serde_json::from_str::<PaymentRequestPayload>(&gift.rumor.content) else { continue };
+        // Single-mint wallet: only ecash from our mint, in sat, can be received
+        if Some(&payload.mint) != our_mint.as_ref() || payload.unit != CurrencyUnit::Sat {
+            continue;
+        }
+        let token = Token::new(payload.mint, payload.proofs, payload.memo, payload.unit);
+
+        let w = wallet_ref.lock().await;
+        let Some(ref app) = *w else { break };
+        match app.wallet.receive(&token.to_string(), ReceiveOptions::default()).await {
+            Ok(received) => {
+                let balance: u64 = app.wallet.total_balance().await.unwrap_or(Amount::ZERO).into();
+                drop(w);
+                if !paid.swap(true, Ordering::SeqCst) {
+                    show_received(&ui_w, received.into(), balance);
+                } else {
+                    // Lightning completed first; still credit this payment
+                    update_ui(&ui_w, move |ui| {
+                        ui.global::<WalletState>().set_balance(SharedString::from(format!("{}", balance)));
+                    });
+                }
+                break;
+            }
+            Err(e) => {
+                let msg = format!("CASHU PAYMENT FAILED: {}", e);
+                update_ui(&ui_w, move |ui| {
+                    ui.global::<WalletState>().set_status(SharedString::from(msg));
+                });
+            }
+        }
+    }
+    client.shutdown().await;
 }
 
 /// Outcome of checking every token this wallet has sent.
@@ -181,11 +305,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Mint quote: show the invoice, then watch for payment and mint automatically
+    // Receive: create a Lightning invoice and a Cashu payment request for the same amount,
+    // show both (toggled on screen), and complete on whichever is paid first
     let wallet_ref = app_wallet.clone();
     let ui_w = ui_weak.clone();
     let rt_h = rt.handle().clone();
-    ui.global::<WalletState>().on_request_mint_quote(move |amount| {
+    ui.global::<WalletState>().on_request_payment(move |amount| {
         let wallet_ref = wallet_ref.clone();
         let ui_w = ui_w.clone();
         rt_h.spawn(async move {
@@ -207,7 +332,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             app.current_quote = Some(quote);
             drop(w);
 
-            let pixels = match qr_pixels(&invoice) {
+            let invoice_pixels = match qr_pixels(&invoice) {
                 Ok(pixels) => pixels,
                 Err(msg) => {
                     update_ui(&ui_w, move |ui| {
@@ -216,32 +341,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return;
                 }
             };
-            let status = format!("SCAN WITH A LIGHTNING WALLET // PAY {} SAT", amount);
+            // The Cashu request is optional: without it the screen still works over Lightning
+            let request = cashu_request(amount as u64)
+                .ok()
+                .and_then(|(encoded, keys)| qr_pixels(&encoded).ok().map(|pixels| (pixels, keys)));
+            let request_available = request.is_some();
+            let (request_pixels, request_keys) = match request {
+                Some((pixels, keys)) => (Some(pixels), Some(keys)),
+                None => (None, None),
+            };
+
+            let session = RECEIVE_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+            let paid = Arc::new(AtomicBool::new(false));
+            let deadline = if expiry > 0 { expiry } else { now_secs() + RECEIVE_TTL_SECS };
+
             update_ui(&ui_w, move |ui| {
                 let state = ui.global::<WalletState>();
-                state.set_qr_image(slint::Image::from_rgb8(pixels));
+                state.set_qr_image(slint::Image::from_rgb8(invoice_pixels));
+                if let Some(pixels) = request_pixels {
+                    state.set_request_image(slint::Image::from_rgb8(pixels));
+                }
+                state.set_request_available(request_available);
+                state.set_receive_cashu(false);
                 state.set_qr_animated(false);
                 state.set_qr_is_invoice(true);
                 state.set_mint_complete(false);
                 state.set_qr_ready(true);
-                state.set_status(SharedString::from(status));
+                state.set_status(SharedString::from(""));
                 state.set_current_screen(4);
             });
 
-            // Poll until the invoice is paid (then mint), replaced by a newer one, or expired.
+            if let Some(keys) = request_keys {
+                tokio::spawn(watch_cashu_request(
+                    keys,
+                    session,
+                    paid.clone(),
+                    deadline,
+                    wallet_ref.clone(),
+                    ui_w.clone(),
+                ));
+            }
+
+            // Lightning: poll until paid (then mint), superseded, or expired.
             // The wallet lock is held only for each check, so the rest of the app stays usable.
             loop {
                 tokio::time::sleep(Duration::from_millis(PAYMENT_POLL_MS)).await;
+                if paid.load(Ordering::SeqCst) || RECEIVE_SESSION.load(Ordering::SeqCst) != session {
+                    return;
+                }
                 let mut w = wallet_ref.lock().await;
                 let Some(ref mut app) = *w else { return };
                 if app.current_quote.as_ref().map_or(true, |q| q.id != quote_id) {
                     return;
                 }
-                let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
-                if expiry > 0 && now > expiry {
+                if now_secs() > deadline {
                     app.current_quote = None;
                     update_ui(&ui_w, |ui| {
-                        ui.global::<WalletState>().set_status(SharedString::from("INVOICE EXPIRED // CREATE A NEW ONE"));
+                        ui.global::<WalletState>().set_status(SharedString::from("REQUEST EXPIRED // CREATE A NEW ONE"));
                     });
                     return;
                 }
@@ -253,13 +409,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match app.wallet.mint(&quote_id, Default::default(), None).await {
                     Ok(_) => {
                         app.current_quote = None;
-                        let bal: u64 = app.wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
-                        update_ui(&ui_w, move |ui| {
-                            let state = ui.global::<WalletState>();
-                            state.set_balance(SharedString::from(format!("{}", bal)));
-                            state.set_mint_complete(true);
-                            state.set_status(SharedString::from(format!("NEW BALANCE {} SAT", bal)));
-                        });
+                        let balance: u64 = app.wallet.total_balance().await.unwrap_or(Amount::ZERO).into();
+                        if !paid.swap(true, Ordering::SeqCst) {
+                            show_received(&ui_w, amount as u64, balance);
+                        }
                         return;
                     }
                     Err(e) => {

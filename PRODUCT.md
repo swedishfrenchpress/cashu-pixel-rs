@@ -47,7 +47,10 @@ A phone wallet is one app among many. Cashu NERV is a single-purpose object that
 **Current capabilities, from `ui/app.slint` and `src/main.rs`:**
 
 - Home: sat balance, mint host, and SEND, RECEIVE, SETTINGS.
-- Receive: mint via Lightning with preset amounts (21, 100, 500, 1K, 5K, 10K sat), an invoice QR, and automatic payment detection and minting.
+- Receive: preset amounts (21, 100, 500, 1K, 5K, 10K sat). One tap creates both a Lightning invoice and a NUT-18 Cashu payment request for the same amount. The QR screen toggles between them (LIGHTNING | CASHU), both are watched at once, and the first payment completes the screen.
+  - Lightning is polled every 2 seconds and minted automatically.
+  - Cashu requests accept Minibits ecash only (strict mint list) and are delivered over Nostr (NIP-17 gift wrap) through relay.damus.io and nos.lol, using a fresh key per request.
+  - Ecash sent to a request after the app closed or the request expired is not received. The payer's wallet keeps it as a pending send it can reclaim.
 - Send: preset amounts (10, 21, 50, 100, 500, 1K sat) produce an ecash token QR. Tokens over 320 characters are shown as an animated QR (NUT-16, via CDK), with 100-byte frames at 5 per second. The receiving wallet must support NUT-16 animated QRs (cashu.me does).
 - Settings: read-only balance, mint URL, and version string.
 - RECLAIM TOKENS (Settings): checks every token this wallet has sent, takes back the ones nobody has claimed, and reports how many sats came back and how many tokens were already claimed.
