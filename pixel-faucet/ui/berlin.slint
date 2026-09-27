@@ -251,7 +251,8 @@ component Desk inherits Rectangle {
     property <bool> dry: Faucet.phase == Phase.empty;
     property <bool> refilled: self.dry && Faucet.refill-received > 0;
 
-    // Headline: bold, with one italic serif word, the site's signature move
+    // Headline: bold, ending in either the amount in accent ("Don't just talk. Build." on
+    // the site) or one standalone italic serif word ("Important dates.")
     HorizontalLayout {
         x: BerlinLayout.gutter;
         y: 62px;
@@ -266,8 +267,13 @@ component Desk inherits Rectangle {
                 : "The faucet is";
             vertical-alignment: center;
         }
-        if !root.cooling: Aside {
-            text: root.dripping || root.claimed ? "paid." : root.refilled ? "refill." : "dry.";
+        if root.dripping || root.claimed: Head {
+            text: "\{Fmt.sats(Faucet.token-amount)} \{Fmt.unit(Faucet.token-amount)}.";
+            color: Btc.accent;
+            vertical-alignment: center;
+        }
+        if root.dry: Aside {
+            text: root.refilled ? "refill." : "dry.";
             font-size: 56px;
             color: Btc.on-dark;
             vertical-alignment: center;
@@ -294,15 +300,10 @@ component Desk inherits Rectangle {
         x: BerlinLayout.gutter;
         y: 122px;
         height: 34px;
-        spacing: 8px;
         alignment: start;
-        if Faucet.message == "" && root.dripping: Aside {
-            text: "\{Fmt.sats(Faucet.token-amount)} \{Fmt.unit(Faucet.token-amount)}";
-            color: Btc.accent;
-        }
         Aside {
             text: Faucet.message != "" ? Faucet.message
-                : root.dripping ? "of free ecash. Open any Cashu wallet and scan"
+                : root.dripping ? "Free ecash. Open any Cashu wallet and scan"
                 : root.claimed ? (Faucet.cooldown > 0 ? "Enjoy your sats. The next drip is in \{Fmt.clock(Faucet.cooldown)}" : "Enjoy your sats. The next one is on its way")
                 : root.cooling ? "A short pause between claims keeps sats for everyone"
                 : root.refilled ? "Dripping again in a moment"
