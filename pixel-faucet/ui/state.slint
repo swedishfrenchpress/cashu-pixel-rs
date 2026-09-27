@@ -15,14 +15,26 @@ export enum Phase {
     error,
 }
 
+export enum Theme {
+    // The faucet's own look, inspired by umbrelOS
+    dusk,
+    // Styled after btcpp.dev/berlin26
+    berlin,
+}
+
 export global Faucet {
     in property <Phase> phase: Phase.starting;
 
-    // Painted at startup by src/backdrop.rs: the wallpaper with the card and glass baked in,
-    // a blurred copy (start and error screens), and the owner panel's plate
-    in property <image> backdrop;
-    in property <image> backdrop-soft;
-    in property <image> sheet-plate;
+    // The look, picked in Settings
+    in-out property <Theme> theme: Theme.dusk;
+
+    // Painted at startup by src/backdrop: each theme's background, a blurred copy for the
+    // start and error screens, and (Dusk) the settings panel's frosted plate
+    in property <image> dusk-backdrop;
+    in property <image> dusk-soft;
+    in property <image> dusk-sheet;
+    in property <image> berlin-backdrop;
+    in property <image> berlin-soft;
 
     // The token on screen, as a QR (one frame of it when animated)
     in property <image> token-qr;
@@ -57,12 +69,13 @@ export global Faucet {
     // Sats that arrived from the last paid refill; 0 while waiting
     in property <int> refill-received;
 
-    // Owner panel (opened with a long press), and whether it's showing a refill invoice
+    // Settings panel (the gear, top right), and whether it's showing a refill invoice
     in-out property <bool> owner-open;
     in-out property <bool> refill-view;
     callback set-drip(int);
     callback set-cooldown(int);
     callback set-animated(bool);
+    callback set-theme(Theme);
     callback request-refill(int);
     callback close-refill();
     callback reclaim();

@@ -12,7 +12,7 @@ use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferTyp
 use slint::platform::{Platform, WindowAdapter};
 use slint::{ComponentHandle, Rgb8Pixel, SharedString};
 
-use crate::{backdrop, qr_image, Faucet, FaucetApp, Frames, Layout, Phase};
+use crate::{backdrop, qr_image, Faucet, FaucetApp, Frames, Layout, Phase, Theme};
 
 /// A platform whose clock only moves when a snapshot says so, so animations can be settled
 struct SnapshotPlatform {
@@ -64,7 +64,8 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
     let size = 720u32;
     window.set_size(slint::PhysicalSize::new(size, size));
     let started = std::time::Instant::now();
-    backdrop::paint(&backdrop::Geometry::of(&app)).install(&app.global::<Faucet>());
+    backdrop::dusk::paint(&backdrop::dusk::Geometry::of(&app)).install(&app.global::<Faucet>());
+    backdrop::berlin::paint(&backdrop::berlin::Geometry::of(&app)).install(&app.global::<Faucet>());
     println!("backdrops painted in {:?}", started.elapsed());
     app.show()?;
 
@@ -86,9 +87,9 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
     f.set_balance(4200);
     f.set_drips_given(58);
     f.set_sats_given(1234);
-    f.set_token_qr(slint::Image::from_rgb8(token.clone()));
-    f.set_refill_qr(slint::Image::from_rgb8(invoice));
-    f.set_refill_qr_small(slint::Image::from_rgb8(invoice_small));
+    f.set_token_qr(slint::Image::from_rgba8(token.clone()));
+    f.set_refill_qr(slint::Image::from_rgba8(invoice));
+    f.set_refill_qr_small(slint::Image::from_rgba8(invoice_small));
     f.set_refill_amount(1000);
 
     let shoot = |name: &str| -> Result<(), Box<dyn Error>> {
@@ -104,48 +105,57 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
         Ok(())
     };
 
-    f.set_phase(Phase::Starting);
-    shoot("1-starting")?;
-    f.set_phase(Phase::Dripping);
-    shoot("2-dripping")?;
-    f.set_token_qr(slint::Image::from_rgb8(qr_image(&frame, qr)?));
-    shoot("2b-dripping-animated-frame")?;
-    f.set_token_qr(slint::Image::from_rgb8(token));
-    f.set_message(SharedString::from("Can't reach the mint. Retrying…"));
-    shoot("3-dripping-offline")?;
-    f.set_message(SharedString::default());
-    f.set_cooldown(60);
-    f.set_phase(Phase::Claimed);
-    shoot("4-claimed")?;
-    f.set_cooldown_total(60);
-    f.set_cooldown_left(42);
-    f.set_phase(Phase::Cooling);
-    shoot("4b-cooling")?;
-    // The longest fact, to check it fits the card
-    app.global::<crate::Trivia>().set_ticks(64);
-    shoot("4c-cooling-fact-2")?;
-    f.set_balance(12);
-    f.set_phase(Phase::Empty);
-    f.set_refill_ready(true);
-    shoot("5-dry")?;
-    f.set_refill_received(1000);
-    f.set_balance(1012);
-    shoot("6-refilled")?;
-    f.set_refill_received(0);
-    f.set_balance(4200);
-    f.set_phase(Phase::Dripping);
-    f.set_owner_open(true);
-    shoot("7-owner")?;
-    f.set_refill_amount(5000);
-    f.set_refill_view(true);
-    shoot("8-owner-refill")?;
-    f.set_refill_received(5000);
-    shoot("9-owner-refilled")?;
-    f.set_owner_open(false);
-    f.set_refill_view(false);
-    f.set_refill_received(0);
-    f.set_message(SharedString::from("The wallet didn't open: database is locked"));
-    f.set_phase(Phase::Error);
-    shoot("10-error")?;
+    for (theme, prefix) in [(Theme::Dusk, "dusk"), (Theme::Berlin, "berlin")] {
+        f.set_theme(theme);
+        app.global::<crate::Trivia>().set_ticks(0);
+        f.set_message(SharedString::default());
+        f.set_balance(4200);
+        f.set_refill_amount(1000);
+        f.set_refill_ready(false);
+        f.set_refill_received(0);
+        f.set_phase(Phase::Starting);
+        shoot(&format!("{}-1-starting", prefix))?;
+        f.set_phase(Phase::Dripping);
+        shoot(&format!("{}-2-dripping", prefix))?;
+        f.set_token_qr(slint::Image::from_rgba8(qr_image(&frame, qr)?));
+        shoot(&format!("{}-2b-dripping-animated-frame", prefix))?;
+        f.set_token_qr(slint::Image::from_rgba8(token.clone()));
+        f.set_message(SharedString::from("Can't reach the mint. Retrying…"));
+        shoot(&format!("{}-3-dripping-offline", prefix))?;
+        f.set_message(SharedString::default());
+        f.set_cooldown(60);
+        f.set_phase(Phase::Claimed);
+        shoot(&format!("{}-4-claimed", prefix))?;
+        f.set_cooldown_total(60);
+        f.set_cooldown_left(42);
+        f.set_phase(Phase::Cooling);
+        shoot(&format!("{}-4b-cooling", prefix))?;
+        // The longest fact, to check it fits the card
+        app.global::<crate::Trivia>().set_ticks(64);
+        shoot(&format!("{}-4c-cooling-fact-2", prefix))?;
+        f.set_balance(12);
+        f.set_phase(Phase::Empty);
+        f.set_refill_ready(true);
+        shoot(&format!("{}-5-dry", prefix))?;
+        f.set_refill_received(1000);
+        f.set_balance(1012);
+        shoot(&format!("{}-6-refilled", prefix))?;
+        f.set_refill_received(0);
+        f.set_balance(4200);
+        f.set_phase(Phase::Dripping);
+        f.set_owner_open(true);
+        shoot(&format!("{}-7-owner", prefix))?;
+        f.set_refill_amount(5000);
+        f.set_refill_view(true);
+        shoot(&format!("{}-8-owner-refill", prefix))?;
+        f.set_refill_received(5000);
+        shoot(&format!("{}-9-owner-refilled", prefix))?;
+        f.set_owner_open(false);
+        f.set_refill_view(false);
+        f.set_refill_received(0);
+        f.set_message(SharedString::from("The wallet didn't open: database is locked"));
+        f.set_phase(Phase::Error);
+        shoot(&format!("{}-10-error", prefix))?;
+    }
     Ok(())
 }

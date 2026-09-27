@@ -10,22 +10,42 @@ The screen always shows one token QR, 21 sats by default. When someone scans and
 - **Small tokens:** tokens drop their DLEQ proofs. The proofs let a wallet verify a token offline, but they nearly double its length, and a phone claiming the token is online anyway. The faucet encodes tokens itself and leaves the `d` key out. CDK would write it as `null`, and Macadamia (CashuSwift) rejects the whole token when it does.
 - **Animated QR by default:** tokens over 300 characters are shown as animated QRs (NUT-16), about 49×49 modules per frame at 5 frames a second. The frames are built from the faucet's own encoding, not by CDK's encoder, which would put the `null` back. The owner panel can switch to one static QR, for wallets without NUT-16.
 - **Exact-size QRs:** QR codes are rendered in Rust at their exact on-screen size and drawn 1:1. Slint's software renderer drops the last rows and columns when it scales an image by a non-integer factor.
-- **Owner panel:** hold the top of the screen for about a second. From there you can set the sats per drip, the time between drips (off, 30 s, 1 min or 5 min), and animated or static QR; refill with Lightning; take back unclaimed tokens; or exit to the desktop.
+- **Settings:** the gear at the top right. From there you can set the sats per drip, the time between drips (off, 30 s, 1 min or 5 min), animated or static QR, and the theme; refill with Lightning; take back unclaimed tokens; or exit to the desktop.
 
-## Design
+## Themes
 
-The look takes its cues from umbrelOS: dark glass over a cinematic wallpaper, white text at a few fixed opacities, one accent colour taken from the wallpaper, Inter type, and pill buttons. It borrows only design values and ideas. No Umbrel code, wallpapers, icons or other assets are used, because Umbrel is PolyForm Noncommercial and its assets are unlicensed.
+The faucet has two looks. Switch between them under **Settings**, the gear at the top right. The choice is saved in `faucet.json`.
 
-The Slint software renderer can't draw blur, shadows or gradients on rounded shapes. So `src/backdrop.rs` paints everything soft once at startup, which takes about 3 s on the Pi:
+**Dusk** is the faucet's own look, inspired by umbrelOS:
+- dark glass over a cinematic wallpaper
+- white text at a few fixed opacities, one amber accent taken from the wallpaper, Inter type, and pill buttons
 
-- a procedural wallpaper of a sun setting over long-exposure water
-- the white QR card and its shadow
-- the frosted glass widgets, with light bending at their rims
-- the owner panel's plate
+It borrows design values and ideas only. No Umbrel code, wallpapers, icons or other assets are used, because Umbrel is PolyForm Noncommercial and its assets are unlicensed. The wallpaper is procedural: a sun setting behind the QR card over long-exposure water.
 
-`ui/faucet.slint` draws only text, QR codes and solid shapes on top. The two share their geometry through the `Layout` global.
+**bitcoin++ Berlin** is styled after [btcpp.dev/berlin26](https://btcpp.dev/berlin26):
+- **Colours:** paper `#F6F3EE` and ink `#1C1C1E`, with one apricot accent `#F9AF5E` used as flat slabs
+- **Shapes:** square corners, 2 px ink rules in a ledger-style grid, and hard offset shadows
+- **Type:**
+  - IBM Plex Mono for the uppercase labels and buttons
+  - IBM Plex Sans Bold for statements
+  - Source Serif 4 italic for asides and the one italic word in each headline ("Scan. Get *paid.*")
+  - Ubuntu Bold Italic for the `bitcoin++` wordmark
+- **Art:** the event's market illustration as the hero
 
-Inter is under the SIL Open Font License; see `ui/fonts/OFL.txt`.
+In both themes the card turns into Cashu trivia during the pause between claims. The countdown stays in the headline.
+
+**How the themes are built:**
+- **Rendering limits:** Slint's software renderer can't draw blur, shadows or gradients on rounded shapes. So `src/backdrop/` paints each theme's background once at startup, the theme on screen first, which makes switching instant:
+  - `dusk.rs` bakes the wallpaper, the white card and its shadow, the frosted glass widgets and the settings panel's plate.
+  - `berlin.rs` shades the market art (`ui/assets/berlin-market.png`) so the text over it stays legible.
+
+  On the Pi, Dusk takes about 3 s and bitcoin++ about 1 s.
+- **Files:** `ui/dusk.slint` and `ui/berlin.slint` each hold a theme's screens and settings panel. They share `ui/state.slint` and `ui/common.slint` (formatting, trivia, QR codes, the gear), and `ui/faucet.slint` is the window that picks between them.
+- **QR codes:** rendered in Rust at their exact on-screen size, as ink modules on a transparent field, and drawn 1:1. Slint's software renderer drops rows and columns when it scales an image by a non-integer factor.
+
+**Licences:**
+- Inter, IBM Plex and Source Serif 4 are under the SIL Open Font License, and Ubuntu is under the Ubuntu Font Licence; see `ui/fonts/licenses/`.
+- The bitcoin++ name, wordmark, sparkles and artwork belong to bitcoin++. Get the organisers' OK before showing that theme at their event.
 
 ## Build
 

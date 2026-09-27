@@ -14,7 +14,7 @@ use cdk::nuts::{CurrencyUnit, MintQuoteState, Token};
 use cdk::wallet::{SendMemo, SendOptions, Wallet};
 use cdk::Amount;
 use serde::{Deserialize, Serialize};
-use slint::{Rgb8Pixel, SharedPixelBuffer, SharedString};
+use slint::{Rgba8Pixel, SharedPixelBuffer, SharedString};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -59,24 +59,26 @@ fn data_dir() -> PathBuf {
     dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("pixel-faucet")
 }
 
-/// Render a QR code at exactly `size`×`size` pixels, dark modules on white, for the UI to
+/// Render a QR code at exactly `size`×`size` pixels, ink modules on a transparent field
+/// (so each theme's card shows through, and is the quiet zone), for the UI to
 /// draw 1:1. Slint's software renderer must not scale it: its fixed-point stepping drifts
 /// on non-integer scales and drops the last rows and columns (seen on the device as a code
 /// clipped at the bottom and right). Here every pixel maps to its module with integer
 /// maths, so modules come out 4 or 5 px wide and none go missing. There is no margin: the
 /// white card around the code is its quiet zone.
-fn qr_image(data: &str, size: u32) -> Result<SharedPixelBuffer<Rgb8Pixel>, String> {
+fn qr_image(data: &str, size: u32) -> Result<SharedPixelBuffer<Rgba8Pixel>, String> {
     use qrcode::{Color, EcLevel, QrCode};
 
     let code = QrCode::with_error_correction_level(data, EcLevel::L).map_err(|e| format!("QR error: {}", e))?;
     let modules = code.width();
     let dark = code.to_colors();
     let px = size as usize;
-    let mut buf = SharedPixelBuffer::<Rgb8Pixel>::new(size, size);
+    let mut buf = SharedPixelBuffer::<Rgba8Pixel>::new(size, size);
     for (i, pixel) in buf.make_mut_slice().iter_mut().enumerate() {
         let (row, col) = ((i / px) * modules / px, (i % px) * modules / px);
-        let v = if dark[row * modules + col] == Color::Dark { 0 } else { 255 };
-        *pixel = Rgb8Pixel { r: v, g: v, b: v };
+        // Ink #1C1C1E: 15:1 or better on either theme's card
+        let alpha = if dark[row * modules + col] == Color::Dark { 255 } else { 0 };
+        *pixel = Rgba8Pixel { r: 0x1c, g: 0x1c, b: 0x1e, a: alpha };
     }
     Ok(buf)
 }
@@ -185,15 +187,28 @@ struct Saved {
     cooldown: u64,
     /// Show longer tokens as animated QR codes (NUT-16) rather than one dense static code
     animated: bool,
+    /// The look: "dusk" or "berlin"
+    theme: String,
     drips_given: u64,
     sats_given: u64,
     /// The token on screen, so a restart shows the same one instead of leaving it outstanding
     current: Option<Drip>,
 }
 
+fn theme_name(theme: Theme) -> &'static str {
+    match theme {
+        Theme::Berlin => "berlin",
+        _ => "dusk",
+    }
+}
+
+fn theme_from(name: &str) -> Theme {
+    if name == "berlin" { Theme::Berlin } else { Theme::Dusk }
+}
+
 impl Default for Saved {
     fn default() -> Self {
-        Saved { drip: DEFAULT_DRIP, cooldown: DEFAULT_COOLDOWN_SECS, animated: true, drips_given: 0, sats_given: 0, current: None }
+        Saved { drip: DEFAULT_DRIP, cooldown: DEFAULT_COOLDOWN_SECS, animated: true, theme: "dusk".to_string(), drips_given: 0, sats_given: 0, current: None }
     }
 }
 
@@ -274,7 +289,7 @@ impl Screen {
             Ok(pixels) => {
                 let amount = drip.amount as i32;
                 self.update(move |f| {
-                    f.set_token_qr(slint::Image::from_rgb8(pixels));
+                    f.set_token_qr(slint::Image::from_rgba8(pixels));
                     f.set_token_animated(animated);
                     f.set_token_amount(amount);
                     f.set_phase(Phase::Dripping);
@@ -290,6 +305,7 @@ enum Cmd {
     SetDrip(u64),
     SetCooldown(u64),
     SetAnimated(bool),
+    SetTheme(Theme),
     Refill(u64),
     CloseRefill,
     Reclaim,
@@ -437,6 +453,11 @@ impl Dispenser {
                     }
                 }
                 self.show_stats().await;
+            }
+            // The UI has already switched; remember the choice
+            Cmd::SetTheme(theme) => {
+                self.saved.theme = theme_name(theme).to_string();
+                self.saved.store(&self.path);
             }
             Cmd::SetAnimated(animated) => {
                 self.saved.animated = animated;
@@ -622,8 +643,8 @@ impl Dispenser {
         let expires = if quote.expiry > 0 { quote.expiry } else { now_secs() + REFILL_TTL_SECS };
         self.refill = Some(Refill { quote_id: quote.id, amount, expires, by_owner });
         self.screen.update(move |f| {
-            f.set_refill_qr(slint::Image::from_rgb8(pixels));
-            f.set_refill_qr_small(slint::Image::from_rgb8(small));
+            f.set_refill_qr(slint::Image::from_rgba8(pixels));
+            f.set_refill_qr_small(slint::Image::from_rgba8(small));
             f.set_refill_amount(amount as i32);
             f.set_refill_received(0);
             f.set_refill_ready(true);
@@ -672,14 +693,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = FaucetApp::new()?;
     let screen = Screen::new(&app);
 
-    // Paint the backgrounds off the UI thread; the start screen shows until they're ready
-    let geometry = backdrop::Geometry::of(&app);
+    // Start in the saved look
+    let theme = theme_from(&Saved::load(&data_dir().join("faucet.json")).theme);
+    app.global::<Faucet>().set_theme(theme);
+
+    // Paint both themes' backgrounds off the UI thread, the one on screen first, so the
+    // other is ready by the time anyone switches; the start screen shows until then
+    let (dusk, berlin) = (backdrop::dusk::Geometry::of(&app), backdrop::berlin::Geometry::of(&app));
     let painter = screen.clone();
     std::thread::spawn(move || {
-        let started = std::time::Instant::now();
-        let backdrops = backdrop::paint(&geometry);
-        println!("backdrops painted in {:?}", started.elapsed());
-        painter.update(move |f| backdrops.install(f));
+        let paint_dusk = || {
+            let started = std::time::Instant::now();
+            let backdrops = backdrop::dusk::paint(&dusk);
+            println!("dusk backdrops painted in {:?}", started.elapsed());
+            painter.update(move |f| backdrops.install(f));
+        };
+        let paint_berlin = || {
+            let started = std::time::Instant::now();
+            let backdrops = backdrop::berlin::paint(&berlin);
+            println!("berlin backdrops painted in {:?}", started.elapsed());
+            painter.update(move |f| backdrops.install(f));
+        };
+        if theme == Theme::Berlin {
+            paint_berlin();
+            paint_dusk();
+        } else {
+            paint_dusk();
+            paint_berlin();
+        }
     });
     let (commands, receiver) = mpsc::unbounded_channel();
 
@@ -693,6 +734,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let send_drip = send.clone();
     state.on_set_drip(move |amount| send_drip(Cmd::SetDrip(amount.max(1) as u64)));
+    let send_theme = send.clone();
+    state.on_set_theme(move |theme| send_theme(Cmd::SetTheme(theme)));
     let send_animated = send.clone();
     state.on_set_animated(move |animated| send_animated(Cmd::SetAnimated(animated)));
     let send_cooldown = send.clone();
@@ -720,7 +763,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let Some(part) = anim.lock().unwrap().as_mut().and_then(Frames::next) else { return };
             if let Ok(pixels) = qr_image(&part, size) {
-                state.set_token_qr(slint::Image::from_rgb8(pixels));
+                state.set_token_qr(slint::Image::from_rgba8(pixels));
             }
         });
     }
@@ -819,7 +862,7 @@ mod tests {
         assert_eq!(code.width(), 81);
         let image = qr_image(&data, 392).unwrap();
         let px = image.as_slice();
-        let dark = |x: usize, y: usize| px[y * 392 + x].r == 0;
+        let dark = |x: usize, y: usize| px[y * 392 + x].a == 255;
         // All three finder patterns are 7 modules (33 or 34 px) across
         let run = |xs: &mut dyn Iterator<Item = (usize, usize)>| xs.take_while(|&(x, y)| dark(x, y)).count();
         assert!((33..=35).contains(&run(&mut (0..392).map(|x| (x, 0)))));
