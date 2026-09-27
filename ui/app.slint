@@ -445,6 +445,46 @@ component BluetoothKey inherits Rectangle {
     touch := TouchArea { clicked => { root.clicked(); } }
 }
 
+// ─── STEP (Bluetooth redeem: received → swapped at the mint → in the wallet) ───
+component Step inherits Rectangle {
+    in property <string> label;
+    // 0 = to come, 1 = under way, 2 = done
+    in property <int> step-state;
+    // The blink for a step under way
+    in property <bool> lit;
+    in property <color> tint: Nerv.blue;
+    property <color> ink: step-state == 0 ? Nerv.standby-text : tint;
+    height: 44px;
+    background: step-state == 2 ? tint.with-alpha(0.2) : step-state == 1 && lit ? tint.with-alpha(0.16) : Nerv.void;
+    border-width: 1px;
+    border-color: step-state == 0 ? Nerv.standby.with-alpha(0.8) : tint.with-alpha(0.8);
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 10px;
+                height: 10px;
+                background: root.step-state == 2 || (root.step-state == 1 && root.lit) ? root.tint : transparent;
+                border-width: 2px;
+                border-color: root.ink;
+            }
+        }
+        Text {
+            text: root.label;
+            font-size: 18px;
+            font-weight: 700;
+            color: root.ink;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+    }
+}
+
 // ─── HUD READOUT (a caption over a value, in a corner of the Bluetooth stage) ───
 component Readout inherits Rectangle {
     in property <string> caption;
@@ -510,6 +550,8 @@ export enum BlePhase {
 export global WalletState {
     in-out property <string> balance: "0";
     in-out property <string> mint-url: "CONNECTING...";
+    // Mints besides the home mint that this wallet holds ecash from
+    in-out property <int> other-mints: 0;
     in-out property <string> status: "";
     in-out property <int> selected-amount: 0;
     in-out property <image> qr-image;
@@ -531,13 +573,14 @@ export global WalletState {
     in-out property <bool> ble-linked;
     // Bytes of a token received so far
     in-out property <int> ble-bytes;
-    // The token that arrived: its amount, its mint's host, its memo, and whether this
-    // wallet can take it (our mint, in sat)
+    // The token that arrived: its amount, its mint's host, its memo, whether this wallet
+    // can take it (any mint, in sat), and whether its mint is new to this wallet
     in-out property <int> ble-amount;
     in-out property <string> ble-mint;
     in-out property <string> ble-memo;
     in-out property <bool> ble-redeemable;
-    // Why redeeming or Bluetooth failed
+    in-out property <bool> ble-new-mint;
+    // Why the token can't be taken, or why redeeming failed
     in-out property <string> ble-note;
     // Drives the pulses
     in-out property <int> ble-tick;
@@ -564,22 +607,33 @@ export component MainApp inherits Window {
     property <int> amount: WalletState.selected-amount;
     property <length> balance-size: WalletState.balance.character-count > 5 ? 88px : 112px;
 
-    // Bluetooth receive: the stage turns into the token card once a token arrives, blue
-    // while listening, green for ecash this wallet can take, orange when it can't
+    // Bluetooth receive: the stage turns into the token card once a token arrives. Blue is
+    // the Bluetooth channel all the way through, green once the sats are in the wallet,
+    // orange when the token can't be taken or redeeming failed.
     property <bool> ble-card: WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming
         || WalletState.ble-phase == BlePhase.received || WalletState.ble-phase == BlePhase.failed;
     property <bool> ble-advertising: WalletState.ble-phase == BlePhase.listening || WalletState.ble-phase == BlePhase.receiving;
+    // A token on the card, waiting for the user or being redeemed: its pulses keep going
+    property <bool> ble-busy: WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming;
     property <bool> ble-locked: WalletState.ble-linked || WalletState.ble-phase == BlePhase.receiving;
     property <color> ble-ink: WalletState.ble-phase == BlePhase.offline ? Nerv.standby-text
         : WalletState.ble-phase == BlePhase.received ? Nerv.green
         : WalletState.ble-phase == BlePhase.failed ? Nerv.orange
-        : root.ble-card ? (WalletState.ble-redeemable ? Nerv.green : Nerv.orange)
+        : root.ble-card && !WalletState.ble-redeemable ? Nerv.orange
         : Nerv.blue;
+    // The amount counts up once the card has opened
+    property <float> ble-counted: root.ble-busy ? WalletState.ble-amount : 0;
+    animate ble-counted { delay: 300ms; duration: 900ms; easing: ease-out; }
+    // One green shockwave when the sats land
+    property <float> ble-wave: WalletState.ble-phase == BlePhase.received ? 1 : 0;
+    animate ble-wave { duration: 1100ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+    // Blinks the step under way, about twice a second
+    property <bool> ble-blink: Math.mod(WalletState.ble-tick, 16) < 8;
 
     // The pulses' clock: 30 frames a second while they show
     Timer {
         interval: 33ms;
-        running: WalletState.current-screen == 6 && root.ble-advertising;
+        running: WalletState.current-screen == 6 && (root.ble-advertising || root.ble-busy);
         triggered => { WalletState.ble-tick += 1; }
     }
 
@@ -960,7 +1014,7 @@ export component MainApp inherits Window {
             subtitle: WalletState.ble-phase == BlePhase.starting ? "STARTING"
                 : WalletState.ble-phase == BlePhase.listening ? (WalletState.ble-linked ? "LINKED" : "DISCOVERABLE")
                 : WalletState.ble-phase == BlePhase.receiving ? "RECEIVING"
-                : WalletState.ble-phase == BlePhase.token ? (WalletState.ble-redeemable ? "TOKEN FOUND" : "OTHER MINT")
+                : WalletState.ble-phase == BlePhase.token ? (!WalletState.ble-redeemable ? "WRONG UNIT" : WalletState.ble-new-mint ? "NEW MINT" : "TOKEN FOUND")
                 : WalletState.ble-phase == BlePhase.redeeming ? "REDEEMING"
                 : WalletState.ble-phase == BlePhase.received ? "RECEIVED"
                 : WalletState.ble-phase == BlePhase.failed ? "FAILED" : "OFFLINE";
@@ -1059,6 +1113,40 @@ export component MainApp inherits Window {
                 border-color: root.ble-ink.with-alpha(0.35);
                 opacity: root.ble-card ? 1 : 0;
                 animate opacity { duration: 300ms; }
+                animate background, border-color { duration: 400ms; }
+            }
+
+            // Inside the card: the pulses keep going behind the token, quicker while the
+            // mint swaps it, then one green shockwave when the sats land
+            Rectangle {
+                x: stage.cx - stage.card-w / 2;
+                y: stage.cy - stage.card-h / 2;
+                width: stage.card-w;
+                height: stage.card-h;
+                clip: true;
+
+                Rectangle {
+                    opacity: root.ble-busy ? 1 : 0;
+                    animate opacity { delay: 200ms; duration: 400ms; }
+                    for i in 3: Rectangle {
+                        property <float> t: Math.mod(WalletState.ble-tick / (WalletState.ble-phase == BlePhase.redeeming ? 24 : 75) + i / 3, 1);
+                        width: 160px + 620px * self.t;
+                        height: self.width;
+                        x: (stage.card-w - self.width) / 2;
+                        y: (stage.card-h - self.height) / 2;
+                        border-width: 2px;
+                        border-color: root.ble-ink.with-alpha(0.45 * (1 - self.t) * (1 - self.t));
+                    }
+                }
+                Rectangle {
+                    visible: root.ble-wave > 0.01 && root.ble-wave < 0.99;
+                    width: 120px + 760px * root.ble-wave;
+                    height: self.width;
+                    x: (stage.card-w - self.width) / 2;
+                    y: (stage.card-h - self.height) / 2;
+                    border-width: 6px;
+                    border-color: Nerv.green.with-alpha(1 - root.ble-wave);
+                }
             }
 
             lock := Brackets {
@@ -1073,9 +1161,10 @@ export component MainApp inherits Window {
                 opacity: root.ble-card || root.ble-locked ? 1 : 0;
                 animate width, height, arm { duration: 460ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
                 animate opacity { duration: 200ms; }
+                animate tint { duration: 400ms; }
             }
 
-            // The card: the token, then the outcome
+            // The card: the redeem's steps over the token, then the outcome
             Rectangle {
                 x: stage.cx - stage.card-w / 2;
                 y: stage.cy - stage.card-h / 2;
@@ -1084,94 +1173,116 @@ export component MainApp inherits Window {
                 opacity: root.ble-card ? 1 : 0;
                 animate opacity { delay: 240ms; duration: 260ms; easing: ease-out; }
 
-                if WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming: VerticalLayout {
-                    padding: 28px;
-                    alignment: center;
-                    spacing: 14px;
-                    Text {
-                        text: WalletState.ble-redeemable ? "INCOMING ECASH" : "ECASH FROM ANOTHER MINT";
-                        font-size: 22px;
-                        font-weight: 700;
-                        letter-spacing: 6px;
-                        color: root.ble-ink;
-                        horizontal-alignment: center;
-                    }
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 16px;
-                        Text { text: "+" + WalletState.ble-amount; font-size: 104px; font-weight: 700; color: root.ble-ink; vertical-alignment: bottom; }
-                        // Baseline-align the unit: DejaVu descent is 0.236em
-                        VerticalLayout {
-                            alignment: end;
-                            padding-bottom: (104px - 44px) * 0.236;
-                            Text { text: "SAT"; font-size: 44px; font-weight: 700; color: root.ble-ink; }
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 0;
+
+                    if WalletState.ble-phase != BlePhase.failed && WalletState.ble-redeemable: HorizontalLayout {
+                        spacing: 8px;
+                        Step { label: "RECEIVED"; step-state: 2; tint: root.ble-ink; }
+                        Step {
+                            label: "SWAP AT MINT";
+                            step-state: WalletState.ble-phase == BlePhase.redeeming ? 1 : WalletState.ble-phase == BlePhase.received ? 2 : 0;
+                            lit: root.ble-blink;
+                            tint: root.ble-ink;
                         }
+                        Step { label: "IN WALLET"; step-state: WalletState.ble-phase == BlePhase.received ? 2 : 0; tint: root.ble-ink; }
                     }
-                    Text {
-                        text: "FROM " + WalletState.ble-mint;
-                        font-size: 22px;
-                        font-weight: 700;
-                        color: Nerv.standby-text;
-                        horizontal-alignment: center;
-                        overflow: elide;
-                    }
-                    if WalletState.ble-memo != "": Text {
-                        text: "“" + WalletState.ble-memo + "”";
-                        font-size: 22px;
-                        color: root.ble-ink;
-                        horizontal-alignment: center;
-                        overflow: elide;
-                    }
-                    if !WalletState.ble-redeemable: Text {
-                        text: "THIS WALLET ONLY TAKES " + WalletState.mint-url.to-uppercase();
-                        font-size: 18px;
-                        font-weight: 700;
-                        color: Nerv.orange;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                    }
-                }
 
-                if WalletState.ble-phase == BlePhase.received: VerticalLayout {
-                    alignment: center;
-                    spacing: 22px;
-                    HorizontalLayout { alignment: center; PixelCheck { tint: Nerv.green; unit: 12px; } }
-                    Text {
-                        text: "+" + WalletState.received-amount + " SAT";
-                        font-size: 88px;
-                        font-weight: 700;
-                        color: Nerv.green;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: "PAYMENT RECEIVED";
-                        font-size: 24px;
-                        font-weight: 700;
-                        letter-spacing: 6px;
-                        color: Nerv.green;
-                        horizontal-alignment: center;
-                    }
-                }
+                    Rectangle {
+                        vertical-stretch: 1;
 
-                if WalletState.ble-phase == BlePhase.failed: VerticalLayout {
-                    padding: 36px;
-                    alignment: center;
-                    spacing: 18px;
-                    Text {
-                        text: "REDEEM FAILED";
-                        font-size: 40px;
-                        font-weight: 700;
-                        letter-spacing: 4px;
-                        color: Nerv.orange;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: WalletState.ble-note;
-                        font-size: 22px;
-                        font-weight: 700;
-                        color: Nerv.standby-text;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
+                        if root.ble-busy: VerticalLayout {
+                            alignment: center;
+                            spacing: 12px;
+                            Text {
+                                text: WalletState.ble-phase == BlePhase.redeeming ? "CLAIMING AT THE MINT"
+                                    : WalletState.ble-redeemable ? "INCOMING ECASH" : "CAN'T TAKE THIS TOKEN";
+                                font-size: 22px;
+                                font-weight: 700;
+                                letter-spacing: 6px;
+                                color: root.ble-ink;
+                                horizontal-alignment: center;
+                                opacity: WalletState.ble-phase == BlePhase.redeeming && !root.ble-blink ? 0.45 : 1;
+                            }
+                            HorizontalLayout {
+                                alignment: center;
+                                spacing: 16px;
+                                Text { text: "+" + Math.round(root.ble-counted); font-size: 104px; font-weight: 700; color: root.ble-ink; vertical-alignment: bottom; }
+                                // Baseline-align the unit: DejaVu descent is 0.236em
+                                VerticalLayout {
+                                    alignment: end;
+                                    padding-bottom: (104px - 44px) * 0.236;
+                                    Text { text: "SAT"; font-size: 44px; font-weight: 700; color: root.ble-ink; }
+                                }
+                            }
+                            Text {
+                                text: "FROM " + WalletState.ble-mint;
+                                font-size: 22px;
+                                font-weight: 700;
+                                color: Nerv.standby-text;
+                                horizontal-alignment: center;
+                                overflow: elide;
+                            }
+                            if WalletState.ble-memo != "": Text {
+                                text: "“" + WalletState.ble-memo + "”";
+                                font-size: 22px;
+                                color: root.ble-ink;
+                                horizontal-alignment: center;
+                                overflow: elide;
+                            }
+                            if !WalletState.ble-redeemable || WalletState.ble-new-mint: Text {
+                                text: !WalletState.ble-redeemable ? WalletState.ble-note : "NEW MINT // REDEEMING ADDS IT TO THIS WALLET";
+                                font-size: 18px;
+                                font-weight: 700;
+                                color: !WalletState.ble-redeemable ? Nerv.orange : Nerv.amber;
+                                horizontal-alignment: center;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        if WalletState.ble-phase == BlePhase.received: VerticalLayout {
+                            alignment: center;
+                            spacing: 18px;
+                            HorizontalLayout { alignment: center; PixelCheck { tint: Nerv.green; unit: 12px; } }
+                            Text {
+                                text: "+" + WalletState.received-amount + " SAT";
+                                font-size: 88px;
+                                font-weight: 700;
+                                color: Nerv.green;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: "IN YOUR WALLET";
+                                font-size: 24px;
+                                font-weight: 700;
+                                letter-spacing: 6px;
+                                color: Nerv.green;
+                                horizontal-alignment: center;
+                            }
+                        }
+
+                        if WalletState.ble-phase == BlePhase.failed: VerticalLayout {
+                            padding: 16px;
+                            alignment: center;
+                            spacing: 18px;
+                            Text {
+                                text: "REDEEM FAILED";
+                                font-size: 40px;
+                                font-weight: 700;
+                                letter-spacing: 4px;
+                                color: Nerv.orange;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: WalletState.ble-note;
+                                font-size: 22px;
+                                font-weight: 700;
+                                color: Nerv.standby-text;
+                                horizontal-alignment: center;
+                                wrap: word-wrap;
+                            }
+                        }
                     }
                 }
             }
@@ -1239,7 +1350,7 @@ export component MainApp inherits Window {
                 height: 100px;
                 label: WalletState.ble-phase == BlePhase.redeeming ? "REDEEMING..."
                     : WalletState.ble-redeemable ? "REDEEM " + WalletState.ble-amount + " SAT" : "CAN'T REDEEM";
-                accent: Nerv.green;
+                accent: Nerv.blue;
                 enabled: WalletState.ble-phase == BlePhase.token && WalletState.ble-redeemable;
                 clicked => { WalletState.redeem-bluetooth(); }
             }
@@ -1294,7 +1405,13 @@ export component MainApp inherits Window {
             spacing: 16px;
 
             InfoRow { min-height: 128px; vertical-stretch: 1.5; caption: "BALANCE"; value: WalletState.balance + " SAT"; value-size: 64px; value-color: Nerv.green; }
-            InfoRow { min-height: 96px; vertical-stretch: 1; caption: "MINT"; value: WalletState.mint-url; value-size: 28px; }
+            InfoRow {
+                min-height: 96px;
+                vertical-stretch: 1;
+                caption: WalletState.other-mints > 0 ? "MINTS" : "MINT";
+                value: WalletState.mint-url + (WalletState.other-mints > 0 ? " + " + WalletState.other-mints + " MORE" : "");
+                value-size: 28px;
+            }
             InfoRow { min-height: 88px; vertical-stretch: 1; caption: "SYSTEM"; value: "CASHU NERV V0.3.0 // CDK 0.18 // SLINT"; value-size: 20px; value-color: Nerv.standby-text; }
 
             HorizontalLayout {

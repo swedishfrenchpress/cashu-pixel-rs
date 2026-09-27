@@ -94,24 +94,33 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
     s.set_ble_memo(SharedString::from("Thanks for the coffee"));
     s.set_ble_redeemable(true);
     s.set_ble_phase(BlePhase::Token);
-    // Halfway through the brackets opening into the card
+    // Halfway through the brackets opening into the card, then the amount counting up
     shoot("7a-ble-token-opening", Duration::from_millis(180))?;
+    shoot("7b-ble-token-counting", Duration::from_millis(300))?;
+    s.set_ble_tick(30);
     shoot("7-ble-token", settled)?;
     s.set_ble_phase(BlePhase::Redeeming);
+    s.set_ble_tick(36);
     shoot("8-ble-redeeming", settled)?;
     s.set_received_amount(21);
     s.set_balance(SharedString::from("1255"));
     s.set_status(SharedString::from("NEW BALANCE 1255 SAT"));
     s.set_ble_phase(BlePhase::Received);
+    // The shockwave on its way out
+    shoot("9a-ble-received-wave", Duration::from_millis(160))?;
     shoot("9-ble-received", settled)?;
 
     s.set_status(SharedString::default());
     s.set_ble_amount(500);
     s.set_ble_mint(SharedString::from("MINT.COINOS.IO"));
     s.set_ble_memo(SharedString::default());
-    s.set_ble_redeemable(false);
+    s.set_ble_new_mint(true);
     s.set_ble_phase(BlePhase::Token);
-    shoot("10-ble-other-mint", settled)?;
+    shoot("10-ble-new-mint", settled)?;
+    s.set_ble_redeemable(false);
+    s.set_ble_new_mint(false);
+    s.set_ble_note(SharedString::from("THIS WALLET ONLY HOLDS SAT, NOT USD"));
+    shoot("10b-ble-wrong-unit", settled)?;
     s.set_ble_redeemable(true);
     s.set_ble_note(SharedString::from("TOKEN ALREADY SPENT"));
     s.set_ble_phase(BlePhase::Failed);
@@ -121,5 +130,10 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
     s.set_status(SharedString::from("BLUETOOTH ERROR: NO BLUETOOTH ADAPTER FOUND"));
     s.set_ble_phase(BlePhase::Offline);
     shoot("12-ble-offline", settled)?;
+
+    s.set_status(SharedString::default());
+    s.set_other_mints(2);
+    s.set_current_screen(5);
+    shoot("13-settings-mints", settled)?;
     Ok(())
 }

@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use cdk::cdk_database::WalletDatabase;
 use cdk::mint_url::MintUrl;
 use cdk::nuts::CurrencyUnit;
 use cdk::nuts::nut00::PaymentMethod;
@@ -56,9 +57,51 @@ fn mint_host(url: &str) -> String {
     url.trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or(url).to_string()
 }
 
+/// The wallet: one CDK wallet per mint, all on the same seed and database
 struct AppWallet {
+    /// The home mint. Lightning and payment requests receive here, and sends draw from it
+    /// first.
     wallet: Wallet,
+    /// Other mints this wallet holds ecash from, added as tokens from them are redeemed
+    others: Vec<Wallet>,
+    localstore: Arc<cdk_sqlite::wallet::WalletSqliteDatabase>,
+    seed: [u8; 64],
     current_quote: Option<cdk::wallet::MintQuote>,
+}
+
+impl AppWallet {
+    /// Every mint's wallet, home first
+    fn wallets(&self) -> impl Iterator<Item = &Wallet> {
+        std::iter::once(&self.wallet).chain(self.others.iter())
+    }
+
+    /// Sats across all mints
+    async fn balance(&self) -> u64 {
+        let mut total = 0;
+        for wallet in self.wallets() {
+            total += u64::from(wallet.total_balance().await.unwrap_or(Amount::ZERO));
+        }
+        total
+    }
+
+    fn holds(&self, mint: &MintUrl) -> bool {
+        self.wallets().any(|w| &w.mint_url == mint)
+    }
+
+    /// The wallet for `mint`: the one this wallet has, or a new one that is only kept once
+    /// something is received into it (see `keep`)
+    fn wallet_for(&self, mint: &MintUrl) -> Result<Wallet, cdk::Error> {
+        match self.wallets().find(|w| &w.mint_url == mint) {
+            Some(wallet) => Ok(wallet.clone()),
+            None => Wallet::new(&mint.to_string(), CurrencyUnit::Sat, self.localstore.clone(), self.seed, None),
+        }
+    }
+
+    fn keep(&mut self, wallet: Wallet) {
+        if !self.holds(&wallet.mint_url) {
+            self.others.push(wallet);
+        }
+    }
 }
 
 /// Render a QR code as dark modules on a light field with a 4-module quiet zone,
@@ -170,7 +213,7 @@ async fn watch_cashu_request(
         let Some(ref app) = *w else { break };
         match app.wallet.receive(&token.to_string(), ReceiveOptions::default()).await {
             Ok(received) => {
-                let balance: u64 = app.wallet.total_balance().await.unwrap_or(Amount::ZERO).into();
+                let balance = app.balance().await;
                 drop(w);
                 if !paid.swap(true, Ordering::SeqCst) {
                     show_received(&ui_w, received.into(), balance);
@@ -194,6 +237,7 @@ async fn watch_cashu_request(
 }
 
 /// Outcome of checking every token this wallet has sent.
+#[derive(Default)]
 struct ReclaimSummary {
     sats: u64,
     reclaimed: usize,
@@ -226,7 +270,7 @@ async fn reclaim_unclaimed(wallet: &Wallet) -> Result<ReclaimSummary, cdk::Error
     Ok(ReclaimSummary { sats: sats.into(), reclaimed, already_claimed, failed })
 }
 
-async fn create_wallet() -> Result<Wallet, Box<dyn std::error::Error + Send + Sync>> {
+async fn open_wallets() -> Result<AppWallet, Box<dyn std::error::Error + Send + Sync>> {
     let data_dir = dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("cashu-pixel");
@@ -250,10 +294,19 @@ async fn create_wallet() -> Result<Wallet, Box<dyn std::error::Error + Send + Sy
         seed
     };
 
-    let wallet = Wallet::new(MINT_URL, CurrencyUnit::Sat, localstore, seed, None)?;
+    let wallet = Wallet::new(MINT_URL, CurrencyUnit::Sat, localstore.clone(), seed, None)?;
     wallet.recover_incomplete_sagas().await?;
 
-    Ok(wallet)
+    // A wallet for every other mint the database holds ecash from, reachable or not, so
+    // all of it counts in the balance
+    let mut others: Vec<Wallet> = Vec::new();
+    for proof in localstore.get_proofs(None, None, None, None).await? {
+        if proof.mint_url != wallet.mint_url && !others.iter().any(|w| w.mint_url == proof.mint_url) {
+            others.push(Wallet::new(&proof.mint_url.to_string(), CurrencyUnit::Sat, localstore.clone(), seed, None)?);
+        }
+    }
+
+    Ok(AppWallet { wallet, others, localstore, seed, current_quote: None })
 }
 
 fn update_ui(ui_weak: &slint::Weak<MainApp>, f: impl FnOnce(&MainApp) + Send + 'static) {
@@ -289,17 +342,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wallet_ref = app_wallet.clone();
     let ui_w = ui_weak.clone();
     rt.spawn(async move {
-        match create_wallet().await {
-            Ok(wallet) => {
-                let balance: u64 = wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
+        match open_wallets().await {
+            Ok(app) => {
+                let balance = app.balance().await;
+                let others = app.others.len();
                 let mut w = wallet_ref.lock().await;
-                *w = Some(AppWallet { wallet, current_quote: None });
+                *w = Some(app);
                 drop(w);
                 update_ui(&ui_w, move |ui| {
                     let state = ui.global::<WalletState>();
                     state.set_balance(SharedString::from(format!("{}", balance)));
                     state.set_mint_url(SharedString::from(mint_host(MINT_URL)));
+                    state.set_other_mints(others as i32);
                 });
+
+                // Finish anything the other mints' wallets left half done
+                let w = wallet_ref.lock().await;
+                if let Some(ref app) = *w {
+                    for other in &app.others {
+                        let _ = other.recover_incomplete_sagas().await;
+                    }
+                }
+                drop(w);
 
                 // Mint any invoices that were paid while the app was closed
                 let w = wallet_ref.lock().await;
@@ -307,7 +371,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Ok(minted) = app.wallet.mint_unissued_quotes().await {
                         if minted > Amount::ZERO {
                             let minted: u64 = minted.into();
-                            let bal: u64 = app.wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
+                            let bal = app.balance().await;
                             update_ui(&ui_w, move |ui| {
                                 let state = ui.global::<WalletState>();
                                 state.set_balance(SharedString::from(format!("{}", bal)));
@@ -430,7 +494,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match app.wallet.mint(&quote_id, Default::default(), None).await {
                     Ok(_) => {
                         app.current_quote = None;
-                        let balance: u64 = app.wallet.total_balance().await.unwrap_or(Amount::ZERO).into();
+                        let balance = app.balance().await;
                         if !paid.swap(true, Ordering::SeqCst) {
                             show_received(&ui_w, amount as u64, balance);
                         }
@@ -480,64 +544,94 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ui_w = ui_w.clone();
         let anim_ref = anim_ref.clone();
         rt_h.spawn(async move {
-            let mut w = wallet_ref.lock().await;
-            if let Some(ref mut app) = *w {
-                match app.wallet.prepare_send(Amount::from(amount as u64), SendOptions::default()).await {
-                    Ok(prepared) => match prepared.confirm(None).await {
-                        Ok(token) => {
-                            let token_str = token.to_string();
-                            let bal: u64 = app.wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
-                            drop(w);
-                            // Small tokens: one static QR. Larger ones: animated NUT-16 frames.
-                            let mut first_frame = token_str.clone();
-                            let mut animated = false;
-                            if token_str.len() > STATIC_QR_MAX_LEN {
-                                if let Ok(mut encoder) = token.ur_encoder(UR_FRAGMENT_LEN) {
-                                    if let Ok(part) = encoder.next_part() {
-                                        first_frame = part;
-                                        animated = true;
-                                        *anim_ref.lock().unwrap() = Some(encoder);
-                                    }
-                                }
-                            }
-                            match qr_pixels(&first_frame) {
-                                Ok(pixels) => {
-                                    let status = if animated {
-                                        format!("SCAN TO RECEIVE {} SAT // ANIMATED QR", amount)
-                                    } else {
-                                        format!("SCAN TO RECEIVE {} SAT", amount)
-                                    };
-                                    update_ui(&ui_w, move |ui| {
-                                        let state = ui.global::<WalletState>();
-                                        state.set_balance(SharedString::from(format!("{}", bal)));
-                                        state.set_qr_image(slint::Image::from_rgb8(pixels));
-                                        state.set_qr_animated(animated);
-                                        state.set_qr_ready(true);
-                                        state.set_status(SharedString::from(status));
-                                        state.set_qr_is_invoice(false);
-                                        state.set_mint_complete(false);
-                                        state.set_current_screen(4);
-                                    });
-                                }
-                                Err(_) => {
-                                    let short = format!("{}...", &token_str[..60.min(token_str.len())]);
-                                    update_ui(&ui_w, move |ui| {
-                                        let state = ui.global::<WalletState>();
-                                        state.set_balance(SharedString::from(format!("{}", bal)));
-                                        state.set_status(SharedString::from(format!("TOKEN TOO LARGE FOR QR: {}", short)));
-                                    });
-                                }
-                            }
+            let w = wallet_ref.lock().await;
+            let Some(ref app) = *w else { return };
+            let amount = amount as u64;
+
+            // A token comes from a single mint: the home mint when it covers the amount,
+            // otherwise the other mint holding the most
+            let mut candidates = Vec::new();
+            for wallet in app.wallets() {
+                let held = u64::from(wallet.total_balance().await.unwrap_or(Amount::ZERO));
+                if held >= amount {
+                    candidates.push((wallet.clone(), held));
+                }
+            }
+            candidates.sort_by_key(|(wallet, held)| (wallet.mint_url != app.wallet.mint_url, std::cmp::Reverse(*held)));
+            let mut sent = None;
+            let mut error = None;
+            for (wallet, _) in candidates {
+                match wallet.prepare_send(Amount::from(amount), SendOptions::default()).await {
+                    Ok(prepared) => {
+                        match prepared.confirm(None).await {
+                            Ok(token) => sent = Some((token, wallet.mint_url.clone())),
+                            Err(e) => error = Some(e.to_string()),
                         }
-                        Err(e) => {
-                            let msg = format!("ERROR: {}", e);
-                            update_ui(&ui_w, move |ui| { ui.global::<WalletState>().set_status(SharedString::from(msg)); });
-                        }
-                    },
-                    Err(e) => {
-                        let msg = format!("ERROR: {}", e);
-                        update_ui(&ui_w, move |ui| { ui.global::<WalletState>().set_status(SharedString::from(msg)); });
+                        break;
                     }
+                    // Short once fees are counted: try the next mint
+                    Err(e) => error = Some(e.to_string()),
+                }
+            }
+            let bal = app.balance().await;
+            let home = app.wallet.mint_url.clone();
+            drop(w);
+
+            let Some((token, mint)) = sent else {
+                let msg = match error {
+                    Some(e) => format!("ERROR: {}", e),
+                    None if bal >= amount => format!("NO SINGLE MINT HOLDS {} SAT // BALANCE IS SPLIT ACROSS MINTS", amount),
+                    None => format!("NOT ENOUGH SATS // BALANCE {} SAT", bal),
+                };
+                update_ui(&ui_w, move |ui| {
+                    let state = ui.global::<WalletState>();
+                    state.set_balance(SharedString::from(format!("{}", bal)));
+                    state.set_status(SharedString::from(msg));
+                });
+                return;
+            };
+
+            let token_str = token.to_string();
+            // Small tokens: one static QR. Larger ones: animated NUT-16 frames.
+            let mut first_frame = token_str.clone();
+            let mut animated = false;
+            if token_str.len() > STATIC_QR_MAX_LEN {
+                if let Ok(mut encoder) = token.ur_encoder(UR_FRAGMENT_LEN) {
+                    if let Ok(part) = encoder.next_part() {
+                        first_frame = part;
+                        animated = true;
+                        *anim_ref.lock().unwrap() = Some(encoder);
+                    }
+                }
+            }
+            match qr_pixels(&first_frame) {
+                Ok(pixels) => {
+                    let status = if mint != home {
+                        format!("SCAN TO RECEIVE {} SAT // {}", amount, mint_host(&mint.to_string()).to_uppercase())
+                    } else if animated {
+                        format!("SCAN TO RECEIVE {} SAT // ANIMATED QR", amount)
+                    } else {
+                        format!("SCAN TO RECEIVE {} SAT", amount)
+                    };
+                    update_ui(&ui_w, move |ui| {
+                        let state = ui.global::<WalletState>();
+                        state.set_balance(SharedString::from(format!("{}", bal)));
+                        state.set_qr_image(slint::Image::from_rgb8(pixels));
+                        state.set_qr_animated(animated);
+                        state.set_qr_ready(true);
+                        state.set_status(SharedString::from(status));
+                        state.set_qr_is_invoice(false);
+                        state.set_mint_complete(false);
+                        state.set_current_screen(4);
+                    });
+                }
+                Err(_) => {
+                    let short = format!("{}...", &token_str[..60.min(token_str.len())]);
+                    update_ui(&ui_w, move |ui| {
+                        let state = ui.global::<WalletState>();
+                        state.set_balance(SharedString::from(format!("{}", bal)));
+                        state.set_status(SharedString::from(format!("TOKEN TOO LARGE FOR QR: {}", short)));
+                    });
                 }
             }
         });
@@ -548,7 +642,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ble_receive = Arc::new(std::sync::Mutex::new(BleReceive::default()));
     let ble_link = ble::Link::default();
 
-    let (receive, link, ui_w, rt_h) = (ble_receive.clone(), ble_link.clone(), ui_weak.clone(), rt.handle().clone());
+    let (receive, link, wallet_ref, ui_w, rt_h) =
+        (ble_receive.clone(), ble_link.clone(), app_wallet.clone(), ui_weak.clone(), rt.handle().clone());
     ui.global::<WalletState>().on_start_bluetooth(move || {
         let (events_tx, mut events) = tokio::sync::mpsc::unbounded_channel();
         let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
@@ -562,9 +657,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let session = BLE_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
         rt_h.spawn(ble::serve(events_tx, link.clone(), stop_rx));
 
-        let (receive, link, ui_w) = (receive.clone(), link.clone(), ui_w.clone());
+        let (receive, link, wallet_ref, ui_w) = (receive.clone(), link.clone(), wallet_ref.clone(), ui_w.clone());
         rt_h.spawn(async move {
-            let our_mint = MintUrl::from_str(MINT_URL).ok();
             while let Some(event) = events.recv().await {
                 if BLE_SESSION.load(Ordering::SeqCst) != session {
                     break;
@@ -591,16 +685,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }),
                     ble::Event::Token(token) if !holding => {
                         let amount: u64 = token.value().map(u64::from).unwrap_or(0);
-                        let mint = token.mint_url().map(|m| m.to_string()).unwrap_or_default();
-                        let host = mint_host(&mint);
+                        let mint = token.mint_url().ok();
+                        let host = mint.as_ref().map(|m| mint_host(&m.to_string())).unwrap_or_default();
                         let memo = token.memo().clone().unwrap_or_default();
-                        let redeemable = token.mint_url().ok() == our_mint && token.unit() == Some(CurrencyUnit::Sat);
-                        receive.lock().unwrap().token = Some(token);
-                        let reply = if redeemable {
-                            format!("Got {} sat. Tap REDEEM on the screen.", amount)
-                        } else {
-                            format!("That token is from {}. Cashu NERV only takes ecash from {}.", host, mint_host(MINT_URL))
+                        // Any mint will do; the wallet holds sat only (tokens without a unit are sat)
+                        let unit = token.unit().unwrap_or(CurrencyUnit::Sat);
+                        let redeemable = mint.is_some() && unit == CurrencyUnit::Sat;
+                        let new_mint = {
+                            let w = wallet_ref.lock().await;
+                            match (&*w, &mint) {
+                                (Some(app), Some(mint)) => !app.holds(mint),
+                                _ => false,
+                            }
                         };
+                        receive.lock().unwrap().token = Some(token);
+                        let reply = if !redeemable {
+                            format!("That token is in {}. Cashu NERV only holds sat.", unit)
+                        } else if new_mint {
+                            format!("Got {} sat from {}, a mint this wallet hasn't used yet. Tap REDEEM on the screen.", amount, host)
+                        } else {
+                            format!("Got {} sat from {}. Tap REDEEM on the screen.", amount, host)
+                        };
+                        let note = if redeemable { String::new() } else { format!("THIS WALLET ONLY HOLDS SAT, NOT {}", unit.to_string().to_uppercase()) };
                         let shown = host.to_uppercase();
                         update_ui(&ui_w, move |ui| {
                             let state = ui.global::<WalletState>();
@@ -608,6 +714,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             state.set_ble_mint(SharedString::from(shown));
                             state.set_ble_memo(SharedString::from(memo));
                             state.set_ble_redeemable(redeemable);
+                            state.set_ble_new_mint(new_mint);
+                            state.set_ble_note(SharedString::from(note));
                             state.set_ble_phase(BlePhase::Token);
                             state.set_status(SharedString::from(""));
                         });
@@ -669,10 +777,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         update_ui(&ui_w, |ui| ui.global::<WalletState>().set_ble_phase(BlePhase::Redeeming));
         let (receive, link, wallet_ref, ui_w) = (receive.clone(), link.clone(), wallet_ref.clone(), ui_w.clone());
         rt_h.spawn(async move {
-            let w = wallet_ref.lock().await;
-            let Some(ref app) = *w else { return };
-            let result = app.wallet.receive(&token.to_string(), ReceiveOptions::default()).await;
-            let balance: u64 = app.wallet.total_balance().await.unwrap_or(Amount::ZERO).into();
+            let mut w = wallet_ref.lock().await;
+            let Some(ref mut app) = *w else { return };
+            // Into the wallet for the token's mint, which is kept from then on if it's new
+            let result = match token.mint_url().map_err(|e| e.to_string()).and_then(|mint| app.wallet_for(&mint).map_err(|e| e.to_string())) {
+                Ok(wallet) => match wallet.receive(&token.to_string(), ReceiveOptions::default()).await {
+                    Ok(received) => {
+                        app.keep(wallet);
+                        Ok(received)
+                    }
+                    Err(e) => Err(e.to_string()),
+                },
+                Err(e) => Err(e),
+            };
+            let balance = app.balance().await;
+            let others = app.others.len();
             drop(w);
             receive.lock().unwrap().token = None;
             match result {
@@ -681,14 +800,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     update_ui(&ui_w, move |ui| {
                         let state = ui.global::<WalletState>();
                         state.set_balance(SharedString::from(format!("{}", balance)));
+                        state.set_other_mints(others as i32);
                         state.set_received_amount(received as i32);
                         state.set_ble_phase(BlePhase::Received);
                         state.set_status(SharedString::from(format!("NEW BALANCE {} SAT", balance)));
                     });
                     link.reply(&format!("Redeemed {} sat. Thank you!", received)).await;
                 }
-                Err(e) => {
-                    let reason = e.to_string();
+                Err(reason) => {
                     let note = reason.to_uppercase();
                     update_ui(&ui_w, move |ui| {
                         let state = ui.global::<WalletState>();
@@ -711,7 +830,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         rt_h.spawn(async move {
             let w = wallet_ref.lock().await;
             let Some(ref app) = *w else { return };
-            let status = match reclaim_unclaimed(&app.wallet).await {
+            // Every mint's sends; a mint that can't be checked counts as one failure
+            let mut summary: Result<ReclaimSummary, cdk::Error> = Ok(ReclaimSummary::default());
+            for wallet in app.wallets() {
+                match (reclaim_unclaimed(wallet).await, summary.as_mut()) {
+                    (Ok(s), Ok(total)) => {
+                        total.sats += s.sats;
+                        total.reclaimed += s.reclaimed;
+                        total.already_claimed += s.already_claimed;
+                        total.failed += s.failed;
+                    }
+                    // The home mint failing is the error to show
+                    (Err(e), Ok(_)) if wallet.mint_url == app.wallet.mint_url => summary = Err(e),
+                    (Err(_), Ok(total)) => total.failed += 1,
+                    (_, Err(_)) => {}
+                }
+            }
+            let status = match summary {
                 Ok(s) if s.reclaimed == 0 && s.failed == 0 && s.already_claimed > 0 => format!(
                     "NOTHING TO RECLAIM // {} SENT TOKEN{} ALREADY CLAIMED",
                     s.already_claimed,
@@ -735,7 +870,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => format!("RECLAIM ERROR: {}", e),
             };
-            let bal: u64 = app.wallet.total_balance().await.unwrap_or(Amount::from(0)).into();
+            let bal = app.balance().await;
             update_ui(&ui_w, move |ui| {
                 let state = ui.global::<WalletState>();
                 state.set_balance(SharedString::from(format!("{}", bal)));
