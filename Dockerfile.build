@@ -17,6 +17,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src/ src/
 COPY ui/ ui/
+COPY pixel-faucet/ pixel-faucet/
 
 RUN cargo build --release
 

@@ -1,0 +1,70 @@
+// State shared between the faucet loop (src/main.rs) and the screens.
+
+export enum Phase {
+    // Opening the wallet
+    starting,
+    // A token QR is on screen, waiting for someone to scan it
+    dripping,
+    // The token on screen was just claimed; the next one follows shortly
+    claimed,
+    // Waiting out the pause between claims, with a countdown to the next token
+    cooling,
+    // Balance below one drip: the screen shows a Lightning invoice to refill
+    empty,
+    // The wallet could not open; `message` says why
+    error,
+}
+
+export global Faucet {
+    in property <Phase> phase: Phase.starting;
+
+    // Painted at startup by src/backdrop.rs: the wallpaper with the card and glass baked in,
+    // a blurred copy (start and error screens), and the owner panel's plate
+    in property <image> backdrop;
+    in property <image> backdrop-soft;
+    in property <image> sheet-plate;
+
+    // The token on screen, as a QR (one frame of it when animated)
+    in property <image> token-qr;
+    in property <bool> token-animated;
+    // Sats in the token on screen
+    in property <int> token-amount;
+
+    // Sats per token for the next drip
+    in property <int> drip: 21;
+    // Show longer tokens as animated QR codes (the owner's setting)
+    in property <bool> animated-qr: true;
+    // Seconds between a claim and the next token (the owner's setting)
+    in property <int> cooldown: 60;
+    // The countdown on screen: its length, and the seconds left (ticked down by the UI)
+    in property <int> cooldown-total: 60;
+    in-out property <int> cooldown-left;
+    // Sats left in the wallet (not counting the token on screen)
+    in property <int> balance;
+    // Tokens given out and sats claimed, all time
+    in property <int> drips-given;
+    in property <int> sats-given;
+    in property <string> mint-host;
+    // A short line about the mint or wallet (offline, errors, reclaim results); empty when all is well
+    in property <string> message;
+
+    // Refill: a Lightning invoice anyone can pay to top the faucet up
+    in property <image> refill-qr;
+    // The same invoice at the owner panel's size (QR codes are drawn 1:1, never scaled)
+    in property <image> refill-qr-small;
+    in property <int> refill-amount;
+    in property <bool> refill-ready;
+    // Sats that arrived from the last paid refill; 0 while waiting
+    in property <int> refill-received;
+
+    // Owner panel (opened with a long press), and whether it's showing a refill invoice
+    in-out property <bool> owner-open;
+    in-out property <bool> refill-view;
+    callback set-drip(int);
+    callback set-cooldown(int);
+    callback set-animated(bool);
+    callback request-refill(int);
+    callback close-refill();
+    callback reclaim();
+    callback exit-app();
+}

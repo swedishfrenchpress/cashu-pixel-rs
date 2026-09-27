@@ -1,8 +1,5 @@
-[workspace]
-members = [".", "pixel-faucet"]
-
 [package]
-name = "cashu-pixel"
+name = "pixel-faucet"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,16 +9,15 @@ cdk-sqlite = { version = "0.18", default-features = false, features = ["wallet"]
 slint = { version = "1.6", features = ["backend-linuxkms", "renderer-software"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 qrcode = { version = "0.14", default-features = false }
-nostr-sdk = { version = "0.44.1", default-features = false, features = ["nip44", "nip59"] }
+png = "0.17"
+ciborium = "0.2"
+base64 = "0.22"
+ur = "0.5"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+uuid = "1"
 rand = "0.8"
 dirs = "5"
 
 [build-dependencies]
 slint-build = "1.6"
-
-[profile.release]
-opt-level = "z"
-lto = true
-strip = true
-codegen-units = 1

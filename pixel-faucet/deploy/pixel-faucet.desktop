@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pixel Faucet
+GenericName=Ecash Faucet
+Comment=Gives out Cashu ecash, one QR at a time
+Exec=pixel-faucet
+Icon=pixel-faucet
+Terminal=false
+StartupNotify=false
+Categories=Office;Finance;

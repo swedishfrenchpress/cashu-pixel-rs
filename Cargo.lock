@@ -4693,6 +4693,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixel-faucet"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "cdk",
+ "cdk-sqlite",
+ "ciborium",
+ "dirs",
+ "png 0.17.16",
+ "qrcode",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "slint",
+ "slint-build",
+ "tokio",
+ "ur",
+ "uuid",
+]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
