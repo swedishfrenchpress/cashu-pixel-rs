@@ -62,6 +62,32 @@ component PixelCheck inherits Rectangle {
     }
 }
 
+// ─── PIXEL BLUETOOTH RUNE (stepped; square geometry only) ───
+component PixelBluetooth inherits Rectangle {
+    in property <color> tint: Nerv.blue;
+    in property <length> unit: 4px;
+    width: 10 * unit;
+    height: 18 * unit;
+
+    // The stem, then the two chevrons that cross it at the middle, drawn in 2×2-unit
+    // steps like the check so the strokes stay solid
+    Rectangle { x: 4 * root.unit; y: 0; width: 2 * root.unit; height: 18 * root.unit; background: root.tint; }
+    for cell in [
+        // From the top of the stem out to the upper point, then down through the middle
+        { x: 5, y: 1 }, { x: 6, y: 2 }, { x: 7, y: 3 }, { x: 8, y: 4 }, { x: 7, y: 5 }, { x: 6, y: 6 }, { x: 5, y: 7 },
+        { x: 3, y: 9 }, { x: 2, y: 10 }, { x: 1, y: 11 }, { x: 0, y: 12 },
+        // From the bottom of the stem out to the lower point, then up through the middle
+        { x: 5, y: 15 }, { x: 6, y: 14 }, { x: 7, y: 13 }, { x: 8, y: 12 }, { x: 7, y: 11 }, { x: 6, y: 10 }, { x: 5, y: 9 },
+        { x: 3, y: 7 }, { x: 2, y: 6 }, { x: 1, y: 5 }, { x: 0, y: 4 },
+    ]: Rectangle {
+        x: cell.x * root.unit;
+        y: cell.y * root.unit;
+        width: 2 * root.unit;
+        height: 2 * root.unit;
+        background: root.tint;
+    }
+}
+
 // ─── BRACKET CORNERS ───
 component Brackets inherits Rectangle {
     in property <color> tint: Nerv.orange;
@@ -387,34 +413,48 @@ component NervStatusBar inherits Rectangle {
     }
 }
 
-// ─── SCANNING BANNER ───
-component NervScanBanner inherits Rectangle {
-    in property <bool> active: true;
-    property <color> ink: active ? Nerv.blue : Nerv.standby;
-    height: 52px;
-    background: Nerv.console;
-    border-width: 1px;
-    border-color: ink.with-alpha(active ? 0.5 : 0.45);
+// ─── BLUETOOTH KEY (Receive: open the Bluetooth receive screen) ───
+component BluetoothKey inherits Rectangle {
+    callback clicked();
+    property <bool> down: touch.pressed;
+    height: 80px;
+    background: down ? Nerv.blue.with-alpha(0.2) : Nerv.console;
+    border-width: down ? 2px : 1px;
+    border-color: Nerv.blue.with-alpha(down ? 1.0 : 0.5);
 
     // Hazard bars
-    Rectangle { x: 0; y: 0; width: 8px; height: parent.height; background: ink.with-alpha(active ? 0.3 : 0.25); }
-    Rectangle { x: 14px; y: 0; width: 4px; height: parent.height; background: ink.with-alpha(active ? 0.15 : 0.12); }
-    Rectangle { x: parent.width - 8px; y: 0; width: 8px; height: parent.height; background: ink.with-alpha(active ? 0.3 : 0.25); }
-    Rectangle { x: parent.width - 18px; y: 0; width: 4px; height: parent.height; background: ink.with-alpha(active ? 0.15 : 0.12); }
+    Rectangle { x: 0; y: 0; width: 8px; height: parent.height; background: Nerv.blue.with-alpha(0.3); }
+    Rectangle { x: 14px; y: 0; width: 4px; height: parent.height; background: Nerv.blue.with-alpha(0.15); }
+    Rectangle { x: parent.width - 8px; y: 0; width: 8px; height: parent.height; background: Nerv.blue.with-alpha(0.3); }
+    Rectangle { x: parent.width - 18px; y: 0; width: 4px; height: parent.height; background: Nerv.blue.with-alpha(0.15); }
 
     HorizontalLayout {
         alignment: center;
-        spacing: 14px;
-        VerticalLayout { alignment: center; Rectangle { width: 10px; height: 10px; background: ink.with-alpha(active ? 1.0 : 0.7); } }
+        spacing: 20px;
+        VerticalLayout { alignment: center; PixelBluetooth { unit: 3px; } }
         Text {
-            text: active ? "SCANNING FOR BLUETOOTH" : "BLUETOOTH RECEIVE // IN DEVELOPMENT";
-            font-size: 18px;
+            text: "RECEIVE OVER BLUETOOTH";
+            font-size: 24px;
             font-weight: 700;
-            color: active ? Nerv.blue : Nerv.standby-text;
+            letter-spacing: 2px;
+            color: Nerv.blue;
             vertical-alignment: center;
         }
-        VerticalLayout { alignment: center; Rectangle { width: 10px; height: 10px; background: ink.with-alpha(active ? 1.0 : 0.7); } }
     }
+
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+// ─── HUD READOUT (a caption over a value, in a corner of the Bluetooth stage) ───
+component Readout inherits Rectangle {
+    in property <string> caption;
+    in property <string> value;
+    in property <color> tint: Nerv.blue;
+    in property <TextHorizontalAlignment> align: left;
+    width: 220px;
+    height: 54px;
+    Text { x: 0; y: 0; width: parent.width; text: root.caption; font-size: 18px; font-weight: 700; letter-spacing: 2px; color: Nerv.standby-text; horizontal-alignment: root.align; }
+    Text { x: 0; y: 26px; width: parent.width; text: root.value; font-size: 22px; font-weight: 700; color: root.tint; horizontal-alignment: root.align; }
 }
 
 // ─── INFO ROW (Settings) ───
@@ -450,6 +490,23 @@ component ScanlineOverlay inherits Rectangle {
 }
 
 // ─── GLOBAL STATE ───
+export enum BlePhase {
+    // Registering the service with the Bluetooth radio
+    starting,
+    // Advertising, waiting for a phone to send a token
+    listening,
+    // Part of a token has arrived
+    receiving,
+    // A whole token arrived: shown for the user to redeem or discard
+    token,
+    redeeming,
+    received,
+    // Redeeming failed
+    failed,
+    // Bluetooth could not start
+    offline,
+}
+
 export global WalletState {
     in-out property <string> balance: "0";
     in-out property <string> mint-url: "CONNECTING...";
@@ -466,11 +523,31 @@ export global WalletState {
     in-out property <image> request-image;
     in-out property <int> received-amount: 0;
     in-out property <int> current-screen: 0;
-    // 0=home, 1=receive(mint+ble), 2=send, 4=qr, 5=settings
+    // 0=home, 1=receive, 2=send, 4=qr, 5=settings, 6=receive over Bluetooth
+
+    // Receive over Bluetooth
+    in-out property <BlePhase> ble-phase;
+    // A phone is connected
+    in-out property <bool> ble-linked;
+    // Bytes of a token received so far
+    in-out property <int> ble-bytes;
+    // The token that arrived: its amount, its mint's host, its memo, and whether this
+    // wallet can take it (our mint, in sat)
+    in-out property <int> ble-amount;
+    in-out property <string> ble-mint;
+    in-out property <string> ble-memo;
+    in-out property <bool> ble-redeemable;
+    // Why redeeming or Bluetooth failed
+    in-out property <string> ble-note;
+    // Drives the pulses
+    in-out property <int> ble-tick;
 
     callback request-payment(int);
     callback request-send(int);
-    callback start-receive();
+    callback start-bluetooth();
+    callback stop-bluetooth();
+    callback redeem-bluetooth();
+    callback discard-bluetooth();
     callback exit-app();
     callback reclaim-tokens();
 }
@@ -486,6 +563,25 @@ export component MainApp inherits Window {
     property <float> balance-sats: WalletState.balance.is-float() ? WalletState.balance.to-float() : 0;
     property <int> amount: WalletState.selected-amount;
     property <length> balance-size: WalletState.balance.character-count > 5 ? 88px : 112px;
+
+    // Bluetooth receive: the stage turns into the token card once a token arrives, blue
+    // while listening, green for ecash this wallet can take, orange when it can't
+    property <bool> ble-card: WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming
+        || WalletState.ble-phase == BlePhase.received || WalletState.ble-phase == BlePhase.failed;
+    property <bool> ble-advertising: WalletState.ble-phase == BlePhase.listening || WalletState.ble-phase == BlePhase.receiving;
+    property <bool> ble-locked: WalletState.ble-linked || WalletState.ble-phase == BlePhase.receiving;
+    property <color> ble-ink: WalletState.ble-phase == BlePhase.offline ? Nerv.standby-text
+        : WalletState.ble-phase == BlePhase.received ? Nerv.green
+        : WalletState.ble-phase == BlePhase.failed ? Nerv.orange
+        : root.ble-card ? (WalletState.ble-redeemable ? Nerv.green : Nerv.orange)
+        : Nerv.blue;
+
+    // The pulses' clock: 30 frames a second while they show
+    Timer {
+        interval: 33ms;
+        running: WalletState.current-screen == 6 && root.ble-advertising;
+        triggered => { WalletState.ble-tick += 1; }
+    }
 
     // ═══ HOME ═══
     if WalletState.current-screen == 0: VerticalLayout {
@@ -576,7 +672,6 @@ export component MainApp inherits Window {
                         WalletState.current-screen = 1;
                         WalletState.selected-amount = 0;
                         WalletState.status = "";
-                        WalletState.start-receive();
                     }
                 }
             }
@@ -585,7 +680,7 @@ export component MainApp inherits Window {
         NervStatusBar { status: WalletState.status; }
     }
 
-    // ═══ RECEIVE (LIGHTNING MINT; BLE PLANNED) ═══
+    // ═══ RECEIVE (LIGHTNING, CASHU REQUEST, OR BLUETOOTH) ═══
     if WalletState.current-screen == 1: VerticalLayout {
         spacing: 0;
 
@@ -634,8 +729,16 @@ export component MainApp inherits Window {
                 }
             }
 
-            // BLE receive is not implemented yet; keep the banner inactive until it is
-            NervScanBanner { active: false; }
+            BluetoothKey {
+                clicked => {
+                    WalletState.ble-phase = BlePhase.starting;
+                    WalletState.ble-linked = false;
+                    WalletState.ble-bytes = 0;
+                    WalletState.status = "";
+                    WalletState.current-screen = 6;
+                    WalletState.start-bluetooth();
+                }
+            }
         }
 
         NervStatusBar { status: WalletState.status; accent: Nerv.green; }
@@ -844,6 +947,335 @@ export component MainApp inherits Window {
                 }
             }
         }
+    }
+
+    // ═══ RECEIVE OVER BLUETOOTH ═══
+    // Square pulses spread from the rune while the Pi advertises; brackets lock on when a
+    // phone connects, then open into the token card when a whole token has arrived.
+    if WalletState.current-screen == 6: VerticalLayout {
+        spacing: 0;
+
+        NervHeader {
+            title: "RECEIVE // BLUETOOTH";
+            subtitle: WalletState.ble-phase == BlePhase.starting ? "STARTING"
+                : WalletState.ble-phase == BlePhase.listening ? (WalletState.ble-linked ? "LINKED" : "DISCOVERABLE")
+                : WalletState.ble-phase == BlePhase.receiving ? "RECEIVING"
+                : WalletState.ble-phase == BlePhase.token ? (WalletState.ble-redeemable ? "TOKEN FOUND" : "OTHER MINT")
+                : WalletState.ble-phase == BlePhase.redeeming ? "REDEEMING"
+                : WalletState.ble-phase == BlePhase.received ? "RECEIVED"
+                : WalletState.ble-phase == BlePhase.failed ? "FAILED" : "OFFLINE";
+            accent: root.ble-ink;
+            show-back: true;
+            back => {
+                WalletState.stop-bluetooth();
+                WalletState.current-screen = 1;
+                WalletState.status = "";
+            }
+        }
+
+        stage := Rectangle {
+            vertical-stretch: 1;
+            property <length> cx: self.width / 2;
+            property <length> cy: self.height / 2;
+            // The token card the brackets open into
+            property <length> card-w: self.width - 2 * Nerv.margin;
+            property <length> card-h: self.height - 28px;
+
+            // Radar: crosshair, pulses, rune and readouts; folds away when a token arrives
+            Rectangle {
+                opacity: root.ble-card ? 0 : 1;
+                animate opacity { duration: 220ms; easing: ease-out; }
+
+                Rectangle { x: Nerv.margin; y: stage.cy; width: stage.cx - Nerv.margin - 76px; height: 1px; background: root.ble-ink.with-alpha(0.22); }
+                Rectangle { x: stage.cx + 76px; y: stage.cy; width: stage.cx - Nerv.margin - 76px; height: 1px; background: root.ble-ink.with-alpha(0.22); }
+                Rectangle { x: stage.cx; y: 14px; width: 1px; height: stage.cy - 14px - 76px; background: root.ble-ink.with-alpha(0.22); }
+                Rectangle { x: stage.cx; y: stage.cy + 76px; width: 1px; height: stage.cy - 14px - 76px; background: root.ble-ink.with-alpha(0.22); }
+
+                // Three pulses, a third of a cycle apart, fading as they grow
+                for i in 3: Rectangle {
+                    property <float> t: Math.mod(WalletState.ble-tick / 75 + i / 3, 1);
+                    visible: root.ble-advertising;
+                    width: 128px + 320px * self.t;
+                    height: self.width;
+                    x: stage.cx - self.width / 2;
+                    y: stage.cy - self.height / 2;
+                    border-width: 2px;
+                    border-color: root.ble-ink.with-alpha(0.8 * (1 - self.t) * (1 - self.t));
+                }
+
+                Rectangle {
+                    x: stage.cx - 56px;
+                    y: stage.cy - 56px;
+                    width: 112px;
+                    height: 112px;
+                    background: root.ble-locked ? root.ble-ink.with-alpha(0.16) : Nerv.void;
+                    border-width: 2px;
+                    border-color: root.ble-ink.with-alpha(0.8);
+                    animate background { duration: 300ms; }
+                    PixelBluetooth {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        tint: root.ble-ink;
+                        // Breathes while it waits for a phone
+                        opacity: WalletState.ble-phase == BlePhase.listening && !WalletState.ble-linked
+                            ? 0.7 + 0.3 * Math.sin(WalletState.ble-tick * 4.8deg) : 1;
+                    }
+                }
+
+                Readout {
+                    x: Nerv.margin; y: 14px;
+                    caption: "SIGNAL";
+                    value: WalletState.ble-phase == BlePhase.starting ? "STARTING"
+                        : WalletState.ble-phase == BlePhase.offline ? "OFFLINE" : "ADVERTISING";
+                    tint: root.ble-ink;
+                }
+                Readout {
+                    x: stage.width - Nerv.margin - self.width; y: 14px;
+                    caption: "NAME";
+                    value: "CASHU NERV";
+                    tint: root.ble-ink;
+                    align: right;
+                }
+                Readout {
+                    x: Nerv.margin; y: stage.height - 14px - self.height;
+                    caption: "LINK";
+                    value: WalletState.ble-linked ? "PHONE" : "NONE";
+                    tint: WalletState.ble-linked ? root.ble-ink : Nerv.standby-text;
+                }
+                Readout {
+                    x: stage.width - Nerv.margin - self.width; y: stage.height - 14px - self.height;
+                    caption: "RX";
+                    value: WalletState.ble-bytes + " B";
+                    tint: WalletState.ble-bytes > 0 ? root.ble-ink : Nerv.standby-text;
+                    align: right;
+                }
+            }
+
+            // The card's field, behind the brackets
+            Rectangle {
+                x: lock.x; y: lock.y; width: lock.width; height: lock.height;
+                background: root.ble-ink.with-alpha(0.07);
+                border-width: 1px;
+                border-color: root.ble-ink.with-alpha(0.35);
+                opacity: root.ble-card ? 1 : 0;
+                animate opacity { duration: 300ms; }
+            }
+
+            lock := Brackets {
+                property <length> size: root.ble-locked ? 168px : 280px;
+                width: root.ble-card ? stage.card-w : self.size;
+                height: root.ble-card ? stage.card-h : self.size;
+                x: stage.cx - self.width / 2;
+                y: stage.cy - self.height / 2;
+                tint: root.ble-ink;
+                arm: root.ble-card ? 28px : 18px;
+                weight: 3px;
+                opacity: root.ble-card || root.ble-locked ? 1 : 0;
+                animate width, height, arm { duration: 460ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+                animate opacity { duration: 200ms; }
+            }
+
+            // The card: the token, then the outcome
+            Rectangle {
+                x: stage.cx - stage.card-w / 2;
+                y: stage.cy - stage.card-h / 2;
+                width: stage.card-w;
+                height: stage.card-h;
+                opacity: root.ble-card ? 1 : 0;
+                animate opacity { delay: 240ms; duration: 260ms; easing: ease-out; }
+
+                if WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming: VerticalLayout {
+                    padding: 28px;
+                    alignment: center;
+                    spacing: 14px;
+                    Text {
+                        text: WalletState.ble-redeemable ? "INCOMING ECASH" : "ECASH FROM ANOTHER MINT";
+                        font-size: 22px;
+                        font-weight: 700;
+                        letter-spacing: 6px;
+                        color: root.ble-ink;
+                        horizontal-alignment: center;
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 16px;
+                        Text { text: "+" + WalletState.ble-amount; font-size: 104px; font-weight: 700; color: root.ble-ink; vertical-alignment: bottom; }
+                        // Baseline-align the unit: DejaVu descent is 0.236em
+                        VerticalLayout {
+                            alignment: end;
+                            padding-bottom: (104px - 44px) * 0.236;
+                            Text { text: "SAT"; font-size: 44px; font-weight: 700; color: root.ble-ink; }
+                        }
+                    }
+                    Text {
+                        text: "FROM " + WalletState.ble-mint;
+                        font-size: 22px;
+                        font-weight: 700;
+                        color: Nerv.standby-text;
+                        horizontal-alignment: center;
+                        overflow: elide;
+                    }
+                    if WalletState.ble-memo != "": Text {
+                        text: "“" + WalletState.ble-memo + "”";
+                        font-size: 22px;
+                        color: root.ble-ink;
+                        horizontal-alignment: center;
+                        overflow: elide;
+                    }
+                    if !WalletState.ble-redeemable: Text {
+                        text: "THIS WALLET ONLY TAKES " + WalletState.mint-url.to-uppercase();
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: Nerv.orange;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+
+                if WalletState.ble-phase == BlePhase.received: VerticalLayout {
+                    alignment: center;
+                    spacing: 22px;
+                    HorizontalLayout { alignment: center; PixelCheck { tint: Nerv.green; unit: 12px; } }
+                    Text {
+                        text: "+" + WalletState.received-amount + " SAT";
+                        font-size: 88px;
+                        font-weight: 700;
+                        color: Nerv.green;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "PAYMENT RECEIVED";
+                        font-size: 24px;
+                        font-weight: 700;
+                        letter-spacing: 6px;
+                        color: Nerv.green;
+                        horizontal-alignment: center;
+                    }
+                }
+
+                if WalletState.ble-phase == BlePhase.failed: VerticalLayout {
+                    padding: 36px;
+                    alignment: center;
+                    spacing: 18px;
+                    Text {
+                        text: "REDEEM FAILED";
+                        font-size: 40px;
+                        font-weight: 700;
+                        letter-spacing: 4px;
+                        color: Nerv.orange;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: WalletState.ble-note;
+                        font-size: 22px;
+                        font-weight: 700;
+                        color: Nerv.standby-text;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-left: Nerv.margin;
+            padding-right: Nerv.margin;
+            padding-top: 4px;
+            padding-bottom: Nerv.margin;
+            spacing: 16px;
+
+            // Waiting: what to do on the phone
+            if !root.ble-card && WalletState.ble-phase != BlePhase.offline: Rectangle {
+                height: 100px;
+                background: Nerv.console;
+                border-width: 1px;
+                border-color: root.ble-ink.with-alpha(0.45);
+                Rectangle { x: 0; y: 0; width: 6px; height: parent.height; background: root.ble-ink.with-alpha(0.6); }
+                VerticalLayout {
+                    padding-left: 24px;
+                    padding-right: 16px;
+                    alignment: center;
+                    spacing: 8px;
+                    Text {
+                        text: WalletState.ble-phase == BlePhase.starting ? "WAKING THE RADIO..."
+                            : WalletState.ble-phase == BlePhase.receiving ? "RECEIVING TOKEN // " + WalletState.ble-bytes + " BYTES"
+                            : WalletState.ble-linked ? "LINKED // PASTE A CASHU TOKEN AND SEND"
+                            : "ON YOUR PHONE, CONNECT TO CASHU NERV";
+                        font-size: 22px;
+                        font-weight: 700;
+                        color: root.ble-ink;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: "ANY BLE TERMINAL APP // NORDIC UART";
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: Nerv.standby-text;
+                    }
+                }
+            }
+
+            if WalletState.ble-phase == BlePhase.offline: NervButton {
+                height: 100px;
+                label: "TRY AGAIN";
+                accent: Nerv.blue;
+                clicked => {
+                    WalletState.ble-phase = BlePhase.starting;
+                    WalletState.status = "";
+                    WalletState.start-bluetooth();
+                }
+            }
+
+            if WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming: NervButton {
+                width: 200px;
+                height: 100px;
+                label: "DISCARD";
+                label-size: 24px;
+                accent: Nerv.standby-text;
+                enabled: WalletState.ble-phase == BlePhase.token;
+                clicked => { WalletState.discard-bluetooth(); }
+            }
+            if WalletState.ble-phase == BlePhase.token || WalletState.ble-phase == BlePhase.redeeming: NervButton {
+                height: 100px;
+                label: WalletState.ble-phase == BlePhase.redeeming ? "REDEEMING..."
+                    : WalletState.ble-redeemable ? "REDEEM " + WalletState.ble-amount + " SAT" : "CAN'T REDEEM";
+                accent: Nerv.green;
+                enabled: WalletState.ble-phase == BlePhase.token && WalletState.ble-redeemable;
+                clicked => { WalletState.redeem-bluetooth(); }
+            }
+
+            if WalletState.ble-phase == BlePhase.failed: NervButton {
+                width: 200px;
+                height: 100px;
+                label: "DONE";
+                label-size: 24px;
+                accent: Nerv.standby-text;
+                clicked => {
+                    WalletState.stop-bluetooth();
+                    WalletState.current-screen = 0;
+                    WalletState.status = "";
+                }
+            }
+            if WalletState.ble-phase == BlePhase.failed: NervButton {
+                height: 100px;
+                label: "LISTEN AGAIN";
+                accent: Nerv.blue;
+                clicked => { WalletState.discard-bluetooth(); }
+            }
+
+            if WalletState.ble-phase == BlePhase.received: NervButton {
+                height: 100px;
+                label: "DONE";
+                accent: Nerv.green;
+                clicked => {
+                    WalletState.stop-bluetooth();
+                    WalletState.current-screen = 0;
+                    WalletState.status = "";
+                }
+            }
+        }
+
+        NervStatusBar { status: WalletState.status; accent: root.ble-ink; }
     }
 
     // ═══ SETTINGS ═══

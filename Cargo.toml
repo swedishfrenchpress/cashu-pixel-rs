@@ -13,6 +13,12 @@ nostr-sdk = { version = "0.44.1", default-features = false, features = ["nip44",
 serde_json = "1"
 rand = "0.8"
 dirs = "5"
+# --snapshot: writes screens to PNG
+png = "0.17"
+# BLE receive: a GATT server through BlueZ. libdbus is compiled in (vendored), so the
+# build image needs no extra packages; the Pi has the system bus and bluetoothd.
+bluer = { version = "0.17", features = ["bluetoothd"] }
+dbus = { version = "0.9", features = ["vendored"] }
 
 [build-dependencies]
 slint-build = "1.6"

@@ -20,6 +20,9 @@ use tokio::sync::Mutex;
 
 slint::include_modules!();
 
+mod ble;
+mod snapshot;
+
 const MINT_URL: &str = "https://mint.minibits.cash/Bitcoin";
 
 /// Tokens up to this many characters fit one comfortably scannable static QR;
@@ -38,6 +41,20 @@ const RECEIVE_TTL_SECS: u64 = 600;
 
 /// Each receive screen starts a new session; watchers of an older session stop.
 static RECEIVE_SESSION: AtomicU64 = AtomicU64::new(0);
+/// The same for the Bluetooth receive screen: events from an older session are dropped.
+static BLE_SESSION: AtomicU64 = AtomicU64::new(0);
+
+/// Bluetooth receive: the open session's off switch and the token waiting to be redeemed
+#[derive(Default)]
+struct BleReceive {
+    stop: Option<tokio::sync::oneshot::Sender<()>>,
+    token: Option<Token>,
+}
+
+/// A mint URL as the screen shows it: host only
+fn mint_host(url: &str) -> String {
+    url.trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or(url).to_string()
+}
 
 struct AppWallet {
     wallet: Wallet,
@@ -249,6 +266,12 @@ fn update_ui(ui_weak: &slint::Weak<MainApp>, f: impl FnOnce(&MainApp) + Send + '
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--snapshot") {
+        let dir = args.get(i + 1).map_or_else(|| PathBuf::from("snapshots"), PathBuf::from);
+        return snapshot::run(&dir);
+    }
+
     let ui = MainApp::new()?;
     let ui_weak = ui.as_weak();
 
@@ -275,9 +298,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 update_ui(&ui_w, move |ui| {
                     let state = ui.global::<WalletState>();
                     state.set_balance(SharedString::from(format!("{}", balance)));
-                    state.set_mint_url(SharedString::from(
-                        MINT_URL.replace("https://", "").split('/').next().unwrap_or(MINT_URL),
-                    ));
+                    state.set_mint_url(SharedString::from(mint_host(MINT_URL)));
                 });
 
                 // Mint any invoices that were paid while the app was closed
@@ -522,9 +543,163 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
-    // Start receive (BLE scan — placeholder for now). Sets no status: the UI must not
-    // claim a scan is running until BLE receive actually exists.
-    ui.global::<WalletState>().on_start_receive(|| {});
+    // Receive over Bluetooth: advertise while the screen is open, show a token when one
+    // arrives, and redeem it when the user says so
+    let ble_receive = Arc::new(std::sync::Mutex::new(BleReceive::default()));
+    let ble_link = ble::Link::default();
+
+    let (receive, link, ui_w, rt_h) = (ble_receive.clone(), ble_link.clone(), ui_weak.clone(), rt.handle().clone());
+    ui.global::<WalletState>().on_start_bluetooth(move || {
+        let (events_tx, mut events) = tokio::sync::mpsc::unbounded_channel();
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
+        {
+            let mut r = receive.lock().unwrap();
+            if let Some(old) = r.stop.replace(stop_tx) {
+                let _ = old.send(());
+            }
+            r.token = None;
+        }
+        let session = BLE_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+        rt_h.spawn(ble::serve(events_tx, link.clone(), stop_rx));
+
+        let (receive, link, ui_w) = (receive.clone(), link.clone(), ui_w.clone());
+        rt_h.spawn(async move {
+            let our_mint = MintUrl::from_str(MINT_URL).ok();
+            while let Some(event) = events.recv().await {
+                if BLE_SESSION.load(Ordering::SeqCst) != session {
+                    break;
+                }
+                // While a token is on screen, further writes wait until it's redeemed or discarded
+                let holding = receive.lock().unwrap().token.is_some();
+                match event {
+                    ble::Event::Ready => update_ui(&ui_w, |ui| {
+                        ui.global::<WalletState>().set_ble_phase(BlePhase::Listening);
+                    }),
+                    ble::Event::Linked(linked) => update_ui(&ui_w, move |ui| {
+                        let state = ui.global::<WalletState>();
+                        state.set_ble_linked(linked);
+                        if state.get_ble_phase() == BlePhase::Receiving {
+                            state.set_ble_phase(BlePhase::Listening);
+                            state.set_status(SharedString::from("LINK LOST // SEND THE TOKEN AGAIN"));
+                        }
+                    }),
+                    ble::Event::Receiving(bytes) if !holding => update_ui(&ui_w, move |ui| {
+                        let state = ui.global::<WalletState>();
+                        state.set_ble_phase(BlePhase::Receiving);
+                        state.set_ble_bytes(bytes as i32);
+                        state.set_status(SharedString::from(""));
+                    }),
+                    ble::Event::Token(token) if !holding => {
+                        let amount: u64 = token.value().map(u64::from).unwrap_or(0);
+                        let mint = token.mint_url().map(|m| m.to_string()).unwrap_or_default();
+                        let host = mint_host(&mint);
+                        let memo = token.memo().clone().unwrap_or_default();
+                        let redeemable = token.mint_url().ok() == our_mint && token.unit() == Some(CurrencyUnit::Sat);
+                        receive.lock().unwrap().token = Some(token);
+                        let reply = if redeemable {
+                            format!("Got {} sat. Tap REDEEM on the screen.", amount)
+                        } else {
+                            format!("That token is from {}. Cashu NERV only takes ecash from {}.", host, mint_host(MINT_URL))
+                        };
+                        let shown = host.to_uppercase();
+                        update_ui(&ui_w, move |ui| {
+                            let state = ui.global::<WalletState>();
+                            state.set_ble_amount(amount as i32);
+                            state.set_ble_mint(SharedString::from(shown));
+                            state.set_ble_memo(SharedString::from(memo));
+                            state.set_ble_redeemable(redeemable);
+                            state.set_ble_phase(BlePhase::Token);
+                            state.set_status(SharedString::from(""));
+                        });
+                        link.reply(&reply).await;
+                    }
+                    ble::Event::NotToken if !holding => {
+                        update_ui(&ui_w, |ui| {
+                            let state = ui.global::<WalletState>();
+                            state.set_ble_phase(BlePhase::Listening);
+                            state.set_ble_bytes(0);
+                            state.set_status(SharedString::from("THAT WAS NOT A CASHU TOKEN"));
+                        });
+                        link.reply("That's not a Cashu token. Send one that starts with cashuA or cashuB.").await;
+                    }
+                    ble::Event::Failed(e) => {
+                        let note = format!("BLUETOOTH ERROR: {}", e);
+                        update_ui(&ui_w, move |ui| {
+                            let state = ui.global::<WalletState>();
+                            state.set_ble_phase(BlePhase::Offline);
+                            state.set_status(SharedString::from(note));
+                        });
+                    }
+                    ble::Event::Receiving(_) | ble::Event::Token(_) | ble::Event::NotToken => {
+                        link.reply("One token at a time: redeem or discard the one on screen first.").await;
+                    }
+                }
+            }
+        });
+    });
+
+    // Leaving the screen stops advertising and drops any token not redeemed
+    let receive = ble_receive.clone();
+    ui.global::<WalletState>().on_stop_bluetooth(move || {
+        BLE_SESSION.fetch_add(1, Ordering::SeqCst);
+        let mut r = receive.lock().unwrap();
+        if let Some(stop) = r.stop.take() {
+            let _ = stop.send(());
+        }
+        r.token = None;
+    });
+
+    let (receive, link, ui_w, rt_h) = (ble_receive.clone(), ble_link.clone(), ui_weak.clone(), rt.handle().clone());
+    ui.global::<WalletState>().on_discard_bluetooth(move || {
+        receive.lock().unwrap().token = None;
+        update_ui(&ui_w, |ui| {
+            let state = ui.global::<WalletState>();
+            state.set_ble_phase(BlePhase::Listening);
+            state.set_ble_bytes(0);
+            state.set_status(SharedString::from(""));
+        });
+        let link = link.clone();
+        rt_h.spawn(async move { link.reply("Listening again.").await });
+    });
+
+    let (receive, link, wallet_ref, ui_w, rt_h) =
+        (ble_receive.clone(), ble_link.clone(), app_wallet.clone(), ui_weak.clone(), rt.handle().clone());
+    ui.global::<WalletState>().on_redeem_bluetooth(move || {
+        let Some(token) = receive.lock().unwrap().token.clone() else { return };
+        update_ui(&ui_w, |ui| ui.global::<WalletState>().set_ble_phase(BlePhase::Redeeming));
+        let (receive, link, wallet_ref, ui_w) = (receive.clone(), link.clone(), wallet_ref.clone(), ui_w.clone());
+        rt_h.spawn(async move {
+            let w = wallet_ref.lock().await;
+            let Some(ref app) = *w else { return };
+            let result = app.wallet.receive(&token.to_string(), ReceiveOptions::default()).await;
+            let balance: u64 = app.wallet.total_balance().await.unwrap_or(Amount::ZERO).into();
+            drop(w);
+            receive.lock().unwrap().token = None;
+            match result {
+                Ok(received) => {
+                    let received: u64 = received.into();
+                    update_ui(&ui_w, move |ui| {
+                        let state = ui.global::<WalletState>();
+                        state.set_balance(SharedString::from(format!("{}", balance)));
+                        state.set_received_amount(received as i32);
+                        state.set_ble_phase(BlePhase::Received);
+                        state.set_status(SharedString::from(format!("NEW BALANCE {} SAT", balance)));
+                    });
+                    link.reply(&format!("Redeemed {} sat. Thank you!", received)).await;
+                }
+                Err(e) => {
+                    let reason = e.to_string();
+                    let note = reason.to_uppercase();
+                    update_ui(&ui_w, move |ui| {
+                        let state = ui.global::<WalletState>();
+                        state.set_ble_note(SharedString::from(note));
+                        state.set_ble_phase(BlePhase::Failed);
+                    });
+                    link.reply(&format!("Couldn't redeem that token: {}", reason)).await;
+                }
+            }
+        });
+    });
 
     // Reclaim (Settings): check every token this wallet sent; take back unclaimed ones
     let wallet_ref = app_wallet.clone();
