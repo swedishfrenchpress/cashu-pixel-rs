@@ -36,7 +36,12 @@ export component FaucetApp inherits Window {
     Timer {
         interval: 250ms;
         running: Faucet.phase == Phase.cooling;
-        triggered => { Trivia.ticks += 1; }
+        triggered => {
+            Trivia.ticks += 1;
+            if Math.mod(Trivia.ticks, 32 * Trivia.facts.length) == 0 {
+                Trivia.round-done();
+            }
+        }
     }
     // The countdown's clock; the backend decides when the next token actually appears
     Timer {

@@ -14,7 +14,7 @@ use cdk::nuts::{CurrencyUnit, MintQuoteState, Token};
 use cdk::wallet::{SendMemo, SendOptions, Wallet};
 use cdk::Amount;
 use serde::{Deserialize, Serialize};
-use slint::{Rgba8Pixel, SharedPixelBuffer, SharedString};
+use slint::{Model, Rgba8Pixel, SharedPixelBuffer, SharedString};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -204,6 +204,18 @@ fn theme_name(theme: Theme) -> &'static str {
 
 fn theme_from(name: &str) -> Theme {
     if name == "berlin" { Theme::Berlin } else { Theme::Dusk }
+}
+
+/// Every trivia index once, in a random order. A new round never opens with `last`, the
+/// fact that closed the previous one, so no fact shows twice in a row.
+fn shuffled_facts(count: usize, last: Option<i32>) -> slint::ModelRc<i32> {
+    use rand::seq::SliceRandom;
+    let mut order: Vec<i32> = (0..count as i32).collect();
+    order.shuffle(&mut rand::thread_rng());
+    if count > 1 && order.first() == last.as_ref() {
+        order.swap(0, 1);
+    }
+    slint::ModelRc::new(slint::VecModel::from(order))
 }
 
 impl Default for Saved {
@@ -693,6 +705,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = FaucetApp::new()?;
     let screen = Screen::new(&app);
 
+    // Trivia in a random order, reshuffled after each round
+    let trivia = app.global::<Trivia>();
+    let facts = trivia.get_facts().row_count();
+    trivia.set_order(shuffled_facts(facts, None));
+    let weak = app.as_weak();
+    trivia.on_round_done(move || {
+        let Some(app) = weak.upgrade() else { return };
+        let trivia = app.global::<Trivia>();
+        let last = trivia.get_order().iter().last();
+        trivia.set_order(shuffled_facts(facts, last));
+    });
+
     // Start in the saved look
     let theme = theme_from(&Saved::load(&data_dir().join("faucet.json")).theme);
     app.global::<Faucet>().set_theme(theme);
@@ -868,6 +892,19 @@ mod tests {
         assert!((33..=35).contains(&run(&mut (0..392).map(|x| (x, 0)))));
         assert!((33..=35).contains(&run(&mut (0..392).rev().map(|x| (x, 0)))));
         assert!((33..=35).contains(&run(&mut (0..392).rev().map(|y| (0, y)))));
+    }
+
+    #[test]
+    fn shuffled_facts_shows_each_once_and_never_repeats_across_rounds() {
+        let mut last = None;
+        for _ in 0..200 {
+            let order: Vec<i32> = shuffled_facts(18, last).iter().collect();
+            let mut sorted = order.clone();
+            sorted.sort();
+            assert_eq!(sorted, (0..18).collect::<Vec<_>>());
+            assert_ne!(Some(order[0]), last);
+            last = order.last().copied();
+        }
     }
 
     /// The CBOR inside a `cashuB` token, as JSON-ish text

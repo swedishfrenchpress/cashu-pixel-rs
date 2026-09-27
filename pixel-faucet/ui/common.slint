@@ -56,9 +56,15 @@ export global Trivia {
         "A sat is one hundred-millionth of a bitcoin: 0.00000001 BTC.",
         "This faucet is a Raspberry Pi Zero 2 W running CDK, the Cashu Development Kit, written in Rust.",
     ];
+    // The order the facts appear in. Rust shuffles it at startup and again after every
+    // round; until then (and in snapshots) they go in list order.
+    in property <[int]> order;
+    // Every fact has been shown once
+    callback round-done();
     // Moves on every 8 seconds of pause, picking up where it left off after the next claim
     in-out property <int> ticks;
-    out property <int> index: Math.mod(Math.floor(self.ticks / 32), self.facts.length);
+    property <int> slot: Math.mod(Math.floor(self.ticks / 32), self.facts.length);
+    out property <int> index: self.order.length == self.facts.length ? self.order[self.slot] : self.slot;
     // Fades out for the last quarter-second before the next fact
     out property <bool> fading: Math.mod(self.ticks, 32) == 31;
 }
