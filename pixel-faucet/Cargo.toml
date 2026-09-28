@@ -1,0 +1,23 @@
+[package]
+name = "pixel-faucet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cdk = { version = "0.18", default-features = false, features = ["wallet"] }
+cdk-sqlite = { version = "0.18", default-features = false, features = ["wallet"] }
+slint = { version = "1.6", features = ["backend-linuxkms", "renderer-software"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+qrcode = { version = "0.14", default-features = false }
+png = "0.17"
+ciborium = "0.2"
+base64 = "0.22"
+ur = "0.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = "1"
+rand = "0.8"
+dirs = "5"
+
+[build-dependencies]
+slint-build = "1.6"

@@ -1,0 +1,689 @@
+// Dusk: the faucet's own look, inspired by umbrelOS (design values only, no Umbrel code or
+// assets). Dark glass over a procedural sunset, white at fixed alpha steps, one amber
+// accent, Inter, pills. The wallpaper, the white QR card, the glass widgets and every
+// shadow are painted by src/backdrop/dusk.rs at the positions in `DuskLayout`; the software
+// renderer can't draw those soft effects live, so this file draws text, QR codes and solid
+// shapes on top.
+
+import { Faucet, Phase, Theme } from "state.slint";
+import { Layout, Fmt, Trivia, Qr, Gear, Settings } from "common.slint";
+
+// Geometry shared with the Dusk backdrop painter (read from Rust)
+export global DuskLayout {
+    out property <length> gutter: 24px;
+    // The white QR card
+    out property <length> card-x: 140px;
+    out property <length> card-y: 124px;
+    out property <length> card-size: 440px;
+    out property <length> card-radius: 40px;
+    // Clear space around the QR inside the card (the card is its quiet zone)
+    out property <length> card-inset: 24px;
+    // The two glass widgets along the bottom
+    out property <length> widget-y: 584px;
+    out property <length> widget-w: 328px;
+    out property <length> widget-h: 112px;
+    out property <length> widget-radius: 32px;
+    // The owner panel, when open
+    out property <length> sheet-y: 24px;
+    out property <length> sheet-radius: 48px;
+}
+
+global Ui {
+    // White at fixed alpha steps: the whole hierarchy on the dark wallpaper
+    out property <color> text: #ffffffeb;      // 92%
+    out property <color> strong: #ffffffcc;    // 80%
+    out property <color> dim: #ffffff99;       // 60%
+    out property <color> faint: #ffffff80;     // 50%
+    out property <color> ghost: #ffffff66;     // 40%
+    out property <color> fill: #ffffff1a;      // 10%
+    out property <color> fill-press: #ffffff0d; // 5%
+    out property <color> hairline: #ffffff33;  // 20%
+    // On the white card
+    out property <color> ink: #121216;
+    out property <color> ink-dim: #1212168c;
+    out property <color> brand-ink: #B35200;   // amber for text on the white card (4.6:1)
+    // The one accent, taken from the wallpaper's sun
+    out property <color> brand: #ED7307;       // fills with white text (3:1)
+    out property <color> brand-press: #D26505;
+    out property <color> brand-light: #F99B48; // accents on dark
+    out property <color> brand-lightest: #FBB06F;
+}
+
+component Line inherits Text {
+    font-family: "Inter";
+    font-weight: 500;
+    font-size: 22px;
+    letter-spacing: self.font-size * -0.02;
+    color: Ui.dim;
+}
+
+component Display inherits Text {
+    font-family: "Inter Display";
+    font-weight: 700;
+    font-size: 44px;
+    letter-spacing: self.font-size * -0.03;
+    color: Ui.text;
+}
+
+// A water drop holding one pixel of light
+component Mark inherits Rectangle {
+    in property <length> size: 64px;
+    width: self.size;
+    height: self.size * 1.1;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 100;
+        viewbox-height: 110;
+        commands: "M 50 2 C 50 2 10 48 10 70 A 40 40 0 0 0 90 70 C 90 48 50 2 50 2 Z";
+        fill: Ui.brand-light;
+    }
+    Rectangle {
+        x: root.width * 0.3;
+        y: root.height * 0.56;
+        width: root.width * 0.14;
+        height: self.width;
+        background: #ffffffe0;
+    }
+}
+
+component CheckDisc inherits Rectangle {
+    width: 128px;
+    height: 128px;
+    border-radius: self.width / 2;
+    background: Ui.brand;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 128;
+        viewbox-height: 128;
+        commands: "M 38 66 L 56 84 L 92 46";
+        stroke: #ffffff;
+        stroke-width: 10px;
+    }
+}
+
+// Pill button: glass by default, amber when selected, white for the secondary action
+component Pill inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <bool> light;
+    in property <length> font-size: 26px;
+    callback clicked;
+    height: 76px;
+    border-radius: self.height / 2;
+    background: root.selected ? (ta.pressed ? Ui.brand-press : Ui.brand)
+        : root.light ? (ta.pressed ? #ffffffb3 : #ffffffe6)
+        : (ta.pressed ? Ui.fill-press : Ui.fill);
+    border-width: root.selected || root.light ? 0 : 1px;
+    border-color: Ui.hairline;
+    animate background { duration: 120ms; easing: ease-out; }
+    // Light along the top edge (straight run only)
+    Rectangle {
+        x: root.border-radius;
+        y: 1px;
+        width: root.width - 2 * root.border-radius;
+        height: 1px;
+        background: root.light ? transparent : #ffffff26;
+    }
+    Text {
+        text: root.text;
+        font-family: "Inter";
+        font-size: root.font-size;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        color: root.light ? Ui.ink : #ffffff;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Text for one of the baked glass widgets
+component StatWidget inherits Rectangle {
+    in property <string> label;
+    in property <string> note;
+    in property <int> value;
+    width: DuskLayout.widget-w;
+    height: DuskLayout.widget-h;
+    Line {
+        x: 24px;
+        y: 18px;
+        text: root.label;
+        font-weight: 600;
+        color: Ui.faint;
+    }
+    Line {
+        x: root.width - 24px - self.width;
+        y: 18px;
+        width: self.preferred-width;
+        text: root.note;
+        color: Ui.ghost;
+    }
+    amount := Display {
+        x: 24px;
+        y: 44px;
+        width: self.preferred-width;
+        text: Fmt.sats(root.value);
+        font-size: 46px;
+        font-weight: 600;
+        color: Ui.strong;
+    }
+    // Baseline-aligned with the amount
+    Line {
+        x: amount.x + amount.width + 8px;
+        y: amount.y + 22px;
+        text: Fmt.unit(root.value);
+        font-size: 24px;
+        font-weight: 600;
+        color: #ffffff73;
+    }
+}
+
+// The screen while the faucet runs: headline, card contents, stats
+component Desk inherits Rectangle {
+    property <bool> dripping: Faucet.phase == Phase.dripping;
+    property <bool> claimed: Faucet.phase == Phase.claimed;
+    property <bool> cooling: Faucet.phase == Phase.cooling;
+    property <bool> dry: Faucet.phase == Phase.empty;
+    property <bool> refilled: self.dry && Faucet.refill-received > 0;
+
+    // Headline
+    HorizontalLayout {
+        y: 22px;
+        height: 56px;
+        alignment: center;
+        spacing: 12px;
+        Display {
+            text: root.dripping ? "Scan to claim"
+                : root.claimed ? "Enjoy your sats."
+                : root.cooling ? "Next drip in"
+                : root.refilled ? "Thanks for the refill!"
+                : "The faucet is dry.";
+        }
+        if root.dripping: Display {
+            text: "\{Fmt.sats(Faucet.token-amount)} \{Fmt.unit(Faucet.token-amount)}.";
+            color: Ui.brand-lightest;
+        }
+        if root.cooling: Display {
+            text: Fmt.clock(Faucet.cooldown-left);
+            color: Ui.brand-lightest;
+        }
+    }
+    HorizontalLayout {
+        y: 82px;
+        height: 30px;
+        alignment: center;
+        spacing: 10px;
+        if Faucet.message != "": Rectangle {
+            width: 10px;
+            Rectangle {
+                width: 10px;
+                height: 10px;
+                border-radius: 5px;
+                background: Ui.brand-light;
+            }
+        }
+        Line {
+            text: Faucet.message != "" ? Faucet.message
+                : root.dripping ? "Open any Cashu wallet and scan the code."
+                : root.claimed ? (Faucet.cooldown > 0 ? "The next one drips in \{Fmt.clock(Faucet.cooldown)}." : "A fresh one is on its way…")
+                : root.cooling ? "A short pause between claims keeps sats for everyone."
+                : root.refilled ? "Dripping again in a moment…"
+                : "Pay the invoice with Lightning to add \{Fmt.sats(Faucet.refill-amount)} sats.";
+            color: Faucet.message != "" ? Ui.brand-lightest : Ui.dim;
+        }
+    }
+
+    // Card contents (the white card itself is in the backdrop)
+    Rectangle {
+        x: DuskLayout.card-x;
+        y: DuskLayout.card-y;
+        width: DuskLayout.card-size;
+        height: DuskLayout.card-size;
+
+        Qr {
+            source: Faucet.token-qr;
+            opacity: root.dripping ? 1 : 0;
+            animate opacity { duration: 350ms; easing: ease-out; }
+        }
+        Qr {
+            source: Faucet.refill-qr;
+            opacity: root.dry && Faucet.refill-ready && !root.refilled ? 1 : 0;
+            animate opacity { duration: 350ms; easing: ease-out; }
+        }
+        if root.dry && !Faucet.refill-ready && !root.refilled: Line {
+            text: "Creating an invoice…";
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: Ui.ink-dim;
+        }
+        // The pause between claims: Cashu trivia while the countdown runs up top
+        Rectangle {
+            opacity: root.cooling ? 1 : 0;
+            animate opacity { duration: 350ms; easing: ease-out; }
+            Line {
+                x: 40px;
+                y: 44px;
+                text: "Did you know?";
+                font-weight: 600;
+                color: Ui.brand-ink;
+            }
+            Display {
+                x: 40px;
+                y: 86px;
+                width: parent.width - 80px;
+                height: 280px;
+                text: Trivia.facts[Trivia.index];
+                font-size: 32px;
+                font-weight: 600;
+                color: Ui.ink;
+                wrap: word-wrap;
+                vertical-alignment: top;
+                opacity: Trivia.fading ? 0 : 1;
+                animate opacity { duration: 250ms; easing: ease-in-out; }
+            }
+        }
+        // Claimed, or refilled
+        Rectangle {
+            opacity: root.claimed || root.refilled ? 1 : 0;
+            animate opacity { duration: 350ms; easing: ease-out; }
+            CheckDisc {
+                y: 96px;
+            }
+            Display {
+                y: 246px;
+                horizontal-alignment: center;
+                text: "+\{Fmt.sats(root.claimed ? Faucet.token-amount : Faucet.refill-received)} sats";
+                font-size: 64px;
+                color: Ui.ink;
+            }
+            Line {
+                y: 326px;
+                horizontal-alignment: center;
+                text: root.claimed ? "Claimed" : "Refilled";
+                font-size: 26px;
+                color: Ui.ink-dim;
+            }
+        }
+    }
+
+    // Glass widgets
+    StatWidget {
+        x: DuskLayout.gutter;
+        y: DuskLayout.widget-y;
+        label: "Given away";
+        note: Faucet.drips-given == 1 ? "1 claim" : "\{Fmt.sats(Faucet.drips-given)} claims";
+        value: Faucet.sats-given;
+    }
+    StatWidget {
+        x: Layout.screen - DuskLayout.gutter - DuskLayout.widget-w;
+        y: DuskLayout.widget-y;
+        label: "In the faucet";
+        note: Faucet.drip > 0 ? "\{Fmt.sats(Math.floor(Faucet.balance / Faucet.drip))} left" : "";
+        value: Faucet.balance;
+    }
+}
+
+// Start and error screens, over the blurred wallpaper
+component Cover inherits Rectangle {
+    property <bool> failed: Faucet.phase == Phase.error;
+    VerticalLayout {
+        alignment: center;
+        spacing: 18px;
+        padding-left: 60px;
+        padding-right: 60px;
+        HorizontalLayout {
+            alignment: center;
+            Mark { }
+        }
+        Display {
+            text: root.failed ? "The faucet couldn't start." : "Pixel Faucet";
+            horizontal-alignment: center;
+        }
+        Line {
+            text: root.failed ? Faucet.message : "Opening the wallet…";
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        if !root.failed: HorizontalLayout {
+            alignment: center;
+            padding-top: 12px;
+            Rectangle {
+                width: 200px;
+                height: 6px;
+                border-radius: 3px;
+                background: Ui.fill;
+                Rectangle {
+                    x: (parent.width - self.width) * (0.5 + 0.5 * Math.sin(animation-tick() / 1s * 180deg));
+                    width: 70px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: Ui.strong;
+                }
+            }
+        }
+        if root.failed: Line {
+            text: "Settings are behind the gear, top right.";
+            horizontal-alignment: center;
+            color: Ui.ghost;
+        }
+    }
+}
+
+component CloseButton inherits Rectangle {
+    callback clicked;
+    width: 64px;
+    height: 64px;
+    border-radius: self.width / 2;
+    background: ta.pressed ? Ui.fill-press : Ui.fill;
+    Path {
+        width: 22px;
+        height: 22px;
+        viewbox-width: 22;
+        viewbox-height: 22;
+        commands: "M 1 1 L 21 21 M 21 1 L 1 21";
+        stroke: Ui.strong;
+        stroke-width: 3px;
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// A settings row: title and note on the left, controls on the right
+component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> note;
+    height: 88px;
+    Rectangle {
+        x: 0;
+        y: 0;
+        height: 1px;
+        background: #ffffff14;
+    }
+    Line {
+        x: 0;
+        y: 16px;
+        text: root.title;
+        font-weight: 600;
+        color: Ui.text;
+    }
+    Line {
+        x: 0;
+        y: 46px;
+        text: root.note;
+        font-size: 18px;
+        color: Ui.ghost;
+    }
+    HorizontalLayout {
+        x: 196px;
+        y: 12px;
+        width: root.width - 196px;
+        height: 64px;
+        spacing: 8px;
+        @children
+    }
+}
+
+// Settings: drip size, pause, QR style, theme, refills, taking tokens back, exit
+component OwnerSheet inherits Rectangle {
+    width: Layout.screen;
+    height: Layout.screen - DuskLayout.sheet-y;
+
+    Image {
+        source: Faucet.dusk-sheet;
+        width: parent.width;
+        height: parent.height;
+    }
+    // Keep taps on the panel from reaching what's behind it
+    TouchArea { }
+
+    Display {
+        x: 40px;
+        y: 34px;
+        text: Faucet.refill-view ? "Refill" : "Settings";
+        font-size: 40px;
+        color: Ui.strong;
+    }
+    CloseButton {
+        x: parent.width - 40px - self.width;
+        y: 26px;
+        clicked => { Settings.close(); }
+    }
+
+    if !Faucet.refill-view: VerticalLayout {
+        x: 40px;
+        y: 108px;
+        width: parent.width - 80px;
+        height: 5 * 88px;
+        SettingRow {
+            title: "Sats per drip";
+            note: "Per claim";
+            for amount in [8, 16, 21, 32, 64, 100]: Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: amount;
+                selected: Faucet.drip == amount;
+                clicked => { Faucet.set-drip(amount); }
+            }
+        }
+        SettingRow {
+            title: "Pause";
+            note: "Between claims";
+            for option in [
+                { secs: 0, label: "Off" },
+                { secs: 30, label: "30 s" },
+                { secs: 60, label: "1 min" },
+                { secs: 300, label: "5 min" },
+            ]: Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: option.label;
+                selected: Faucet.cooldown == option.secs;
+                clicked => { Faucet.set-cooldown(option.secs); }
+            }
+        }
+        SettingRow {
+            title: "QR code";
+            note: Faucet.animated-qr ? "NUT-16 wallets" : "Every wallet";
+            Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: "Animated";
+                selected: Faucet.animated-qr;
+                clicked => { Faucet.set-animated(true); }
+            }
+            Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: "Static";
+                selected: !Faucet.animated-qr;
+                clicked => { Faucet.set-animated(false); }
+            }
+        }
+        SettingRow {
+            title: "Theme";
+            note: "Look and feel";
+            Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: "Dusk";
+                selected: Faucet.theme == Theme.dusk;
+                clicked => { Faucet.theme = Theme.dusk; Faucet.set-theme(Theme.dusk); }
+            }
+            Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: "bitcoin++";
+                selected: Faucet.theme == Theme.berlin;
+                clicked => { Faucet.theme = Theme.berlin; Faucet.set-theme(Theme.berlin); }
+            }
+        }
+        SettingRow {
+            title: "Refill";
+            note: "Sats, via Lightning";
+            for amount in [1000, 5000, 21000]: Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: Fmt.sats(amount);
+                clicked => {
+                    Faucet.refill-view = true;
+                    Faucet.request-refill(amount);
+                }
+            }
+        }
+    }
+    if !Faucet.refill-view: Line {
+        x: 40px;
+        y: 562px;
+        width: parent.width - 80px;
+        text: Faucet.message != "" ? Faucet.message
+            : "\{Fmt.sats(Faucet.balance)} \{Fmt.unit(Faucet.balance)} in the faucet · \{Fmt.sats(Faucet.sats-given)} given away";
+        color: Faucet.message != "" ? Ui.brand-lightest : Ui.dim;
+        overflow: elide;
+    }
+    if !Faucet.refill-view: HorizontalLayout {
+        x: 40px;
+        y: 602px;
+        width: parent.width - 80px;
+        height: 76px;
+        spacing: 16px;
+        Pill {
+            horizontal-stretch: 1;
+            text: "Take back unclaimed";
+            clicked => { Faucet.reclaim(); }
+        }
+        Pill {
+            horizontal-stretch: 1;
+            light: true;
+            text: "Exit to desktop";
+            clicked => { Faucet.exit-app(); }
+        }
+    }
+
+    if Faucet.refill-view: refill := Rectangle {
+        property <bool> paid: Faucet.refill-received > 0;
+        card := Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: 124px;
+            width: 336px;
+            height: 336px;
+            border-radius: 32px;
+            background: #ffffff;
+            Qr {
+                source: Faucet.refill-qr-small;
+                visible: Faucet.refill-ready && !refill.paid;
+            }
+            if !Faucet.refill-ready && !refill.paid: Line {
+                text: "Creating an invoice…";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                color: Ui.ink-dim;
+            }
+            if refill.paid: VerticalLayout {
+                alignment: center;
+                spacing: 12px;
+                HorizontalLayout {
+                    alignment: center;
+                    CheckDisc { }
+                }
+                Display {
+                    text: "+\{Fmt.sats(Faucet.refill-received)} sats";
+                    font-size: 48px;
+                    color: Ui.ink;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+        Line {
+            y: 490px;
+            width: parent.width;
+            text: refill.paid ? "Refilled. Thank you!" : "Pay \{Fmt.sats(Faucet.refill-amount)} sats with any Lightning wallet.";
+            font-size: 24px;
+            color: Ui.text;
+            horizontal-alignment: center;
+        }
+        Line {
+            y: 526px;
+            width: parent.width;
+            text: refill.paid ? "" : "Waiting for payment…";
+            color: Ui.faint;
+            horizontal-alignment: center;
+        }
+        Pill {
+            x: (parent.width - self.width) / 2;
+            y: 572px;
+            width: 280px;
+            text: refill.paid ? "Done" : "Cancel";
+            light: refill.paid;
+            clicked => {
+                Faucet.refill-view = false;
+                Faucet.close-refill();
+            }
+        }
+    }
+}
+
+export component DuskScreen inherits Rectangle {
+    property <bool> awake: Faucet.phase != Phase.starting && Faucet.phase != Phase.error;
+
+    Image {
+        source: Faucet.dusk-backdrop;
+        width: parent.width;
+        height: parent.height;
+    }
+    // Blurred until the wallet is open, then it pulls into focus
+    Image {
+        source: Faucet.dusk-soft;
+        width: parent.width;
+        height: parent.height;
+        opacity: root.awake ? 0 : 1;
+        animate opacity { duration: 700ms; easing: ease-out; }
+    }
+
+    if root.awake: Desk { }
+    if !root.awake: Cover { }
+
+    // Settings gear, top right: a small glass button (under the panel while it's open)
+    if !Faucet.owner-open: Rectangle {
+        x: parent.width - 16px - self.width;
+        y: 16px;
+        width: 56px;
+        height: 56px;
+        border-radius: self.width / 2;
+        background: gear.pressed ? Ui.fill-press : Ui.fill;
+        border-width: 1px;
+        border-color: Ui.hairline;
+        Gear {
+            width: 26px;
+            height: 26px;
+            fill: Ui.strong;
+        }
+        gear := TouchArea {
+            clicked => { Faucet.owner-open = !Faucet.owner-open; }
+        }
+    }
+
+    Rectangle {
+        background: #000000;
+        opacity: Faucet.owner-open ? 0.45 : 0;
+        animate opacity { duration: 260ms; easing: ease-out; }
+        if Faucet.owner-open: TouchArea {
+            clicked => { Settings.close(); }
+        }
+    }
+    OwnerSheet {
+        y: Faucet.owner-open ? DuskLayout.sheet-y : Layout.screen;
+        animate y { duration: 280ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
+    }
+}

@@ -1,0 +1,778 @@
+// bitcoin++ Berlin, payments edition. The look follows btcpp.dev: paper #F6F3EE and ink
+// #1C1C1E with one apricot accent used as flat slabs, square corners and ink rules (2px
+// here: 1px is only 0.1mm), hard offset shadows, IBM Plex Mono for uppercase labels and
+// buttons, IBM Plex Sans Bold for statements, Source Serif 4 italic for asides (and one
+// italic word inside a bold headline), and the bitcoin++ wordmark in Ubuntu Bold Italic.
+// The market art, shaded for legibility, is painted by src/backdrop/berlin.rs; everything
+// else is flat and drawn here.
+
+import { Faucet, Phase, Theme } from "state.slint";
+import { Layout, Fmt, Trivia, Qr, Gear, Settings } from "common.slint";
+
+// Geometry shared with the Berlin backdrop painter (read from Rust)
+export global BerlinLayout {
+    out property <length> gutter: 40px;
+    // The black ticker bar along the top
+    out property <length> ticker-h: 48px;
+    // The paper QR card (its hard shadow sits 8px below and to the right)
+    out property <length> card-x: 140px;
+    out property <length> card-y: 164px;
+    out property <length> card-size: 432px;
+    // Clear space around the QR inside the card's 2px frame (the card is its quiet zone)
+    out property <length> card-inset: 20px;
+    // The stats band along the bottom
+    out property <length> band-y: 614px;
+    out property <length> rule: 2px;
+}
+
+// bitcoin++ colours, exact from btcpp.dev
+global Btc {
+    out property <color> paper: #F6F3EE;
+    out property <color> warm: #EFEAE2;
+    out property <color> ink: #1C1C1E;
+    out property <color> accent: #F9AF5E;   // fills only: 1.7:1 as text on paper
+    out property <color> chrome: #0A0A0A;   // the ticker
+    out property <color> muted: #666666;    // mono metadata on paper
+    out property <color> accent-text: #9A4C00; // orange text on paper
+    out property <color> ticker-soft: #D8D0C6;
+    out property <color> on-dark: #FFFFFF;
+    out property <color> on-dark-soft: #FFFFFFD9;
+    out property <color> unit: #FFFFFF94;    // countdown unit letters, 58% white
+}
+
+// Uppercase mono label with the site's tracking (the machine voice)
+component Label inherits Text {
+    font-family: "IBM Plex Mono";
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 2.5px;
+    color: Btc.ink;
+}
+
+// Bold statement (headlines, big numbers)
+component Head inherits Text {
+    font-family: "IBM Plex Sans";
+    font-weight: 700;
+    font-size: 52px;
+    letter-spacing: -1px;
+    color: Btc.on-dark;
+}
+
+// Serif italic aside (decks, and the one italic word in a headline)
+component Aside inherits Text {
+    font-family: "Source Serif 4";
+    font-italic: true;
+    font-size: 26px;
+    color: Btc.on-dark-soft;
+}
+
+// The bitcoin++ wordmark: Ubuntu Bold Italic, the second "+" pulled 0.16em left so the
+// two plus bars fuse into one
+component Wordmark inherits Rectangle {
+    in property <length> size: 22px;
+    in property <color> tint: Btc.on-dark;
+    in property <bool> sparkles;
+    width: self.size * 4.154;
+    height: self.size * 1.3;
+    if root.sparkles: Image {
+        source: @image-url("assets/sparkles.png");
+        x: root.size * 3.26;
+        y: root.height * 0.5 - self.height / 2;
+        width: root.size * 1.45;
+        height: self.width;
+    }
+    head := Text {
+        x: 0;
+        text: "bitcoin+";
+        font-family: "Ubuntu";
+        font-weight: 700;
+        font-italic: true;
+        font-size: root.size;
+        color: root.tint;
+        vertical-alignment: center;
+    }
+    Text {
+        x: head.preferred-width - root.size * 0.16;
+        text: "+";
+        font-family: "Ubuntu";
+        font-weight: 700;
+        font-italic: true;
+        font-size: root.size;
+        color: root.tint;
+        vertical-alignment: center;
+    }
+}
+
+// An ink check on an accent square
+component Check inherits Rectangle {
+    width: 112px;
+    height: 112px;
+    background: Btc.accent;
+    border-width: BerlinLayout.rule;
+    border-color: Btc.ink;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 112;
+        viewbox-height: 112;
+        commands: "M 30 58 L 48 76 L 84 38";
+        stroke: Btc.ink;
+        stroke-width: 10px;
+    }
+}
+
+// Square button with an uppercase mono label. Accent when selected, ink when dark,
+// outlined otherwise; pressing inverts to ink, as the site's CTAs do on hover.
+component Button inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <bool> dark;
+    in property <length> font-size: 19px;
+    // Show the bitcoin++ wordmark instead of the text
+    in property <bool> wordmark;
+    callback clicked;
+    height: 64px;
+    background: ta.pressed ? Btc.ink : root.selected ? Btc.accent : root.dark ? Btc.ink : Btc.paper;
+    border-width: BerlinLayout.rule;
+    border-color: Btc.ink;
+    if !root.wordmark: Label {
+        text: root.text;
+        font-size: root.font-size;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: ta.pressed || (root.dark && !root.selected) ? Btc.paper : Btc.ink;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    if root.wordmark: Wordmark {
+        size: 24px;
+        tint: ta.pressed ? Btc.paper : Btc.ink;
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// One cell of the stats band: a big number over a mono caption, like the site's glance stats
+component Stat inherits Rectangle {
+    in property <int> value;
+    in property <string> caption;
+    Text {
+        x: 26px;
+        y: 14px;
+        text: Fmt.sats(root.value);
+        font-family: "IBM Plex Sans";
+        font-weight: 700;
+        font-size: 46px;
+        color: Btc.ink;
+    }
+    Label {
+        x: 26px;
+        y: 72px;
+        text: root.caption;
+        font-size: 15px;
+        font-weight: 500;
+        letter-spacing: 1.5px;
+        color: Btc.muted;
+    }
+}
+
+// The black ticker along the top: the wordmark in its own cell, then mono caps
+component Ticker inherits Rectangle {
+    height: BerlinLayout.ticker-h;
+    background: Btc.chrome;
+    HorizontalLayout {
+        alignment: start;
+        Rectangle {
+            width: mark.width + 40px;
+            mark := Wordmark {
+                x: 20px;
+                size: 22px;
+            }
+        }
+        Rectangle {
+            width: BerlinLayout.rule;
+            background: #F6F3EE38;
+        }
+        HorizontalLayout {
+            padding-left: 20px;
+            spacing: 16px;
+            Label {
+                text: "BERLIN, PAYMENTS EDITION";
+                font-size: 16px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                color: Btc.accent;
+                vertical-alignment: center;
+            }
+            Label {
+                text: "•";
+                font-size: 16px;
+                color: Btc.ticker-soft;
+                vertical-alignment: center;
+            }
+            Label {
+                text: "OCT 1 - 3, 2026";
+                font-size: 16px;
+                font-weight: 500;
+                letter-spacing: 2px;
+                color: Btc.paper;
+                vertical-alignment: center;
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+        Rectangle {
+            width: BerlinLayout.rule;
+            background: #F6F3EE38;
+        }
+        // Settings gear
+        Rectangle {
+            width: BerlinLayout.ticker-h;
+            background: gear.pressed || Faucet.owner-open ? #24211E : transparent;
+            Gear {
+                width: 24px;
+                height: 24px;
+                fill: Faucet.owner-open ? Btc.accent : Btc.paper;
+            }
+            gear := TouchArea {
+                clicked => { Faucet.owner-open = !Faucet.owner-open; }
+            }
+        }
+    }
+}
+
+// The screen while the faucet runs: headline over the art, the card, the stats band
+component Desk inherits Rectangle {
+    property <bool> dripping: Faucet.phase == Phase.dripping;
+    property <bool> claimed: Faucet.phase == Phase.claimed;
+    property <bool> cooling: Faucet.phase == Phase.cooling;
+    property <bool> dry: Faucet.phase == Phase.empty;
+    property <bool> refilled: self.dry && Faucet.refill-received > 0;
+
+    // Headline: bold, ending in either the amount in accent ("Don't just talk. Build." on
+    // the site) or one standalone italic serif word ("Important dates.")
+    HorizontalLayout {
+        x: BerlinLayout.gutter;
+        y: 62px;
+        height: 62px;
+        spacing: 14px;
+        alignment: start;
+        Head {
+            text: root.dripping ? "Scan. Get"
+                : root.claimed ? "You got"
+                : root.cooling ? "Next drip in"
+                : root.refilled ? "Thanks for the"
+                : "The faucet is";
+            vertical-alignment: center;
+        }
+        if root.dripping || root.claimed: Head {
+            text: "\{Fmt.sats(Faucet.token-amount)} \{Fmt.unit(Faucet.token-amount)}.";
+            color: Btc.accent;
+            vertical-alignment: center;
+        }
+        if root.dry: Aside {
+            text: root.refilled ? "refill." : "dry.";
+            font-size: 56px;
+            color: Btc.on-dark;
+            vertical-alignment: center;
+        }
+        // The countdown, in the site's style: two-digit mono values, dimmed unit letters
+        if root.cooling: HorizontalLayout {
+            for part in [
+                { text: Fmt.pad2(Math.floor(Faucet.cooldown-left / 60)), unit: false },
+                { text: "m ", unit: true },
+                { text: Fmt.pad2(Math.mod(Faucet.cooldown-left, 60)), unit: false },
+                { text: "s", unit: true },
+            ]: Text {
+                text: part.text;
+                font-family: "IBM Plex Mono";
+                font-weight: part.unit ? 500 : 600;
+                font-size: 50px;
+                color: part.unit ? Btc.unit : Btc.on-dark;
+                vertical-alignment: center;
+            }
+        }
+    }
+    // Deck, or a status message
+    HorizontalLayout {
+        x: BerlinLayout.gutter;
+        y: 122px;
+        height: 34px;
+        alignment: start;
+        Aside {
+            text: Faucet.message != "" ? Faucet.message
+                : root.dripping ? "Free ecash. Open any Cashu wallet and scan"
+                : root.claimed ? (Faucet.cooldown > 0 ? "Enjoy your sats. The next drip is in \{Fmt.clock(Faucet.cooldown)}" : "Enjoy your sats. The next one is on its way")
+                : root.cooling ? "A short pause between claims keeps sats for everyone"
+                : root.refilled ? "Dripping again in a moment"
+                : "Pay the Lightning invoice to add \{Fmt.sats(Faucet.refill-amount)} sats";
+            color: Faucet.message != "" ? Btc.accent : Btc.on-dark-soft;
+        }
+    }
+
+    // The card's hard shadow, then the card: paper in a 2px ink frame, accent in the pause
+    Rectangle {
+        x: BerlinLayout.card-x + 8px;
+        y: BerlinLayout.card-y + 8px;
+        width: BerlinLayout.card-size;
+        height: BerlinLayout.card-size;
+        background: Btc.chrome;
+    }
+    Rectangle {
+        x: BerlinLayout.card-x;
+        y: BerlinLayout.card-y;
+        width: BerlinLayout.card-size;
+        height: BerlinLayout.card-size;
+        background: root.cooling ? Btc.accent : Btc.paper;
+        border-width: BerlinLayout.rule;
+        border-color: Btc.ink;
+
+        Qr {
+            source: Faucet.token-qr;
+            opacity: root.dripping ? 1 : 0;
+            animate opacity { duration: 300ms; easing: ease-out; }
+        }
+        Qr {
+            source: Faucet.refill-qr;
+            opacity: root.dry && Faucet.refill-ready && !root.refilled ? 1 : 0;
+            animate opacity { duration: 300ms; easing: ease-out; }
+        }
+        if root.dry && !Faucet.refill-ready && !root.refilled: Label {
+            text: "CREATING INVOICE…";
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        // Trivia while the pause runs, on an accent slab like the site's planning board
+        Rectangle {
+            opacity: root.cooling ? 1 : 0;
+            animate opacity { duration: 300ms; easing: ease-out; }
+            Label {
+                x: 36px;
+                y: 36px;
+                text: "§\{Fmt.pad2(Trivia.index + 1)} · DID YOU KNOW?";
+                color: #090909;
+            }
+            Text {
+                x: 36px;
+                y: 82px;
+                width: parent.width - 72px;
+                height: parent.height - 118px;
+                text: Trivia.facts[Trivia.index];
+                font-family: "IBM Plex Sans";
+                font-weight: 700;
+                font-size: 31px;
+                letter-spacing: -0.4px;
+                color: #090909;
+                wrap: word-wrap;
+                vertical-alignment: top;
+                opacity: Trivia.fading ? 0 : 1;
+                animate opacity { duration: 250ms; easing: ease-in-out; }
+            }
+        }
+        // Claimed, or refilled
+        Rectangle {
+            opacity: root.claimed || root.refilled ? 1 : 0;
+            animate opacity { duration: 300ms; easing: ease-out; }
+            Check {
+                y: 86px;
+            }
+            Text {
+                y: 222px;
+                text: "+\{Fmt.sats(root.claimed ? Faucet.token-amount : Faucet.refill-received)} sats";
+                font-family: "IBM Plex Sans";
+                font-weight: 700;
+                font-size: 72px;
+                letter-spacing: -1.5px;
+                color: Btc.ink;
+                horizontal-alignment: center;
+            }
+            Label {
+                y: 322px;
+                text: root.claimed ? "CLAIMED →" : "REFILLED · THANK YOU";
+                color: Btc.muted;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // Stats band: three cells split by ink rules, the site's glance grid
+    Rectangle {
+        y: BerlinLayout.band-y;
+        height: Layout.screen - BerlinLayout.band-y;
+        background: Btc.paper;
+        Rectangle {
+            y: 0;
+            height: BerlinLayout.rule;
+            background: Btc.ink;
+        }
+        for cell[i] in [
+            { value: Faucet.sats-given, caption: "SATS GIVEN AWAY" },
+            { value: Faucet.drips-given, caption: Faucet.drips-given == 1 ? "CLAIM" : "CLAIMS" },
+            { value: Faucet.balance, caption: "SATS IN THE FAUCET" },
+        ]: Stat {
+            x: i * Layout.screen / 3;
+            y: BerlinLayout.rule;
+            width: Layout.screen / 3;
+            height: parent.height - BerlinLayout.rule;
+            value: cell.value;
+            caption: cell.caption;
+            Rectangle {
+                x: 0;
+                width: i > 0 ? BerlinLayout.rule : 0;
+                height: parent.height;
+                background: Btc.ink;
+            }
+        }
+    }
+}
+
+// Start and error screens, over the blurred art
+component Cover inherits Rectangle {
+    property <bool> failed: Faucet.phase == Phase.error;
+    VerticalLayout {
+        alignment: center;
+        spacing: 18px;
+        padding-left: 60px;
+        padding-right: 60px;
+        HorizontalLayout {
+            alignment: center;
+            Wordmark {
+                size: 80px;
+                sparkles: true;
+            }
+        }
+        Label {
+            text: "BERLIN, PAYMENTS EDITION · CASHU FAUCET";
+            font-size: 16px;
+            font-weight: 700;
+            color: Btc.accent;
+            horizontal-alignment: center;
+        }
+        Aside {
+            text: root.failed ? "The faucet couldn't start. \{Faucet.message}" : "Opening the wallet…";
+            font-size: 28px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        if !root.failed: HorizontalLayout {
+            alignment: center;
+            padding-top: 8px;
+            Rectangle {
+                width: 240px;
+                height: 10px;
+                border-width: BerlinLayout.rule;
+                border-color: Btc.paper;
+                Rectangle {
+                    x: BerlinLayout.rule + (parent.width - self.width - 2 * BerlinLayout.rule) * (0.5 + 0.5 * Math.sin(animation-tick() / 1s * 180deg));
+                    y: BerlinLayout.rule;
+                    width: 60px;
+                    height: parent.height - 2 * BerlinLayout.rule;
+                    background: Btc.accent;
+                }
+            }
+        }
+        if root.failed: Label {
+            text: "SETTINGS ARE BEHIND THE GEAR, TOP RIGHT";
+            font-size: 15px;
+            color: Btc.ticker-soft;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+
+// A settings row in the ledger: numbered label and a serif note on the left, controls on
+// the right, an ink rule above
+component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> note;
+    height: 86px;
+    Rectangle {
+        x: 0;
+        y: 0;
+        height: BerlinLayout.rule;
+        background: Btc.ink;
+    }
+    Label {
+        x: 0;
+        y: 18px;
+        text: root.title;
+        color: Btc.ink;
+    }
+    Aside {
+        x: 0;
+        y: 42px;
+        text: root.note;
+        font-size: 19px;
+        color: Btc.muted;
+    }
+    HorizontalLayout {
+        x: 190px;
+        y: 12px;
+        width: root.width - 190px;
+        height: 64px;
+        spacing: 8px;
+        @children
+    }
+}
+
+// Settings: drip size, pause, QR style, theme, refills, taking tokens back, exit
+component OwnerSheet inherits Rectangle {
+    width: Layout.screen;
+    height: Layout.screen - BerlinLayout.ticker-h;
+    background: Btc.paper;
+    // Keep taps on the panel from reaching what's behind it
+    TouchArea { }
+
+    Text {
+        x: 32px;
+        y: 22px;
+        text: Faucet.refill-view ? "Refill." : "Settings.";
+        font-family: "IBM Plex Sans";
+        font-weight: 700;
+        font-size: 40px;
+        letter-spacing: -1px;
+        color: Btc.ink;
+    }
+    Button {
+        x: parent.width - 32px - self.width;
+        y: 16px;
+        width: 64px;
+        text: "×";
+        font-size: 30px;
+        clicked => { Settings.close(); }
+    }
+
+    if !Faucet.refill-view: VerticalLayout {
+        x: 32px;
+        y: 96px;
+        width: parent.width - 64px;
+        height: 5 * 86px;
+        SettingRow {
+            title: "§01 · DRIP";
+            note: "sats per claim";
+            for amount in [8, 16, 21, 32, 64, 100]: Button {
+                horizontal-stretch: 1;
+                text: amount;
+                font-size: 21px;
+                selected: Faucet.drip == amount;
+                clicked => { Faucet.set-drip(amount); }
+            }
+        }
+        SettingRow {
+            title: "§02 · PAUSE";
+            note: "between claims";
+            for option in [
+                { secs: 0, label: "OFF" },
+                { secs: 30, label: "30 S" },
+                { secs: 60, label: "1 MIN" },
+                { secs: 300, label: "5 MIN" },
+            ]: Button {
+                horizontal-stretch: 1;
+                text: option.label;
+                font-size: 17px;
+                selected: Faucet.cooldown == option.secs;
+                clicked => { Faucet.set-cooldown(option.secs); }
+            }
+        }
+        SettingRow {
+            title: "§03 · QR";
+            note: Faucet.animated-qr ? "NUT-16 wallets" : "every wallet";
+            Button {
+                horizontal-stretch: 1;
+                text: "ANIMATED";
+                font-size: 17px;
+                selected: Faucet.animated-qr;
+                clicked => { Faucet.set-animated(true); }
+            }
+            Button {
+                horizontal-stretch: 1;
+                text: "STATIC";
+                font-size: 17px;
+                selected: !Faucet.animated-qr;
+                clicked => { Faucet.set-animated(false); }
+            }
+        }
+        SettingRow {
+            title: "§04 · THEME";
+            note: "look and feel";
+            Button {
+                horizontal-stretch: 1;
+                text: "DUSK";
+                font-size: 17px;
+                selected: Faucet.theme == Theme.dusk;
+                clicked => { Faucet.theme = Theme.dusk; Faucet.set-theme(Theme.dusk); }
+            }
+            Button {
+                horizontal-stretch: 1;
+                wordmark: true;
+                selected: Faucet.theme == Theme.berlin;
+                clicked => { Faucet.theme = Theme.berlin; Faucet.set-theme(Theme.berlin); }
+            }
+        }
+        SettingRow {
+            title: "§05 · REFILL";
+            note: "sats, via Lightning";
+            for amount in [1000, 5000, 21000]: Button {
+                horizontal-stretch: 1;
+                text: Fmt.sats(amount);
+                font-size: 17px;
+                clicked => {
+                    Faucet.refill-view = true;
+                    Faucet.request-refill(amount);
+                }
+            }
+        }
+    }
+    if !Faucet.refill-view: Rectangle {
+        x: 32px;
+        y: 96px + 5 * 86px;
+        width: parent.width - 64px;
+        height: BerlinLayout.rule;
+        background: Btc.ink;
+    }
+    if !Faucet.refill-view: Aside {
+        x: 32px;
+        y: 540px;
+        width: parent.width - 64px;
+        text: Faucet.message != "" ? Faucet.message
+            : "\{Fmt.sats(Faucet.balance)} \{Fmt.unit(Faucet.balance)} in the faucet, \{Fmt.sats(Faucet.sats-given)} given away";
+        font-size: 22px;
+        color: Faucet.message != "" ? Btc.accent-text : Btc.muted;
+        overflow: elide;
+    }
+    if !Faucet.refill-view: HorizontalLayout {
+        x: 32px;
+        y: 592px;
+        width: parent.width - 64px;
+        height: 64px;
+        spacing: 8px;
+        Button {
+            horizontal-stretch: 1;
+            text: "TAKE BACK UNCLAIMED";
+            font-size: 17px;
+            clicked => { Faucet.reclaim(); }
+        }
+        Button {
+            horizontal-stretch: 1;
+            dark: true;
+            text: "EXIT TO DESKTOP →";
+            font-size: 17px;
+            clicked => { Faucet.exit-app(); }
+        }
+    }
+
+    if Faucet.refill-view: refill := Rectangle {
+        property <bool> paid: Faucet.refill-received > 0;
+        Rectangle {
+            x: (parent.width - self.width) / 2 + 8px;
+            y: 104px + 8px;
+            width: 336px;
+            height: 336px;
+            background: Btc.accent;
+        }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: 104px;
+            width: 336px;
+            height: 336px;
+            background: Btc.paper;
+            border-width: BerlinLayout.rule;
+            border-color: Btc.ink;
+            Qr {
+                source: Faucet.refill-qr-small;
+                visible: Faucet.refill-ready && !refill.paid;
+            }
+            if !Faucet.refill-ready && !refill.paid: Label {
+                text: "CREATING INVOICE…";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            if refill.paid: VerticalLayout {
+                alignment: center;
+                spacing: 18px;
+                HorizontalLayout {
+                    alignment: center;
+                    Check { }
+                }
+                Text {
+                    text: "+\{Fmt.sats(Faucet.refill-received)} sats";
+                    font-family: "IBM Plex Sans";
+                    font-weight: 700;
+                    font-size: 48px;
+                    letter-spacing: -1px;
+                    color: Btc.ink;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+        Aside {
+            y: 470px;
+            width: parent.width;
+            text: refill.paid ? "Refilled. Thank you" : "Pay \{Fmt.sats(Faucet.refill-amount)} sats with any Lightning wallet";
+            color: Btc.ink;
+            horizontal-alignment: center;
+        }
+        Label {
+            y: 514px;
+            width: parent.width;
+            text: refill.paid ? "" : "WAITING FOR PAYMENT…";
+            color: Btc.muted;
+            horizontal-alignment: center;
+        }
+        Button {
+            x: (parent.width - self.width) / 2;
+            y: 592px;
+            width: 300px;
+            selected: refill.paid;
+            text: refill.paid ? "DONE →" : "CANCEL";
+            clicked => {
+                Faucet.refill-view = false;
+                Faucet.close-refill();
+            }
+        }
+    }
+}
+
+export component BerlinScreen inherits Rectangle {
+    property <bool> awake: Faucet.phase != Phase.starting && Faucet.phase != Phase.error;
+
+    Image {
+        source: Faucet.berlin-backdrop;
+        width: parent.width;
+        height: parent.height;
+    }
+    // Blurred until the wallet is open, then it pulls into focus
+    Image {
+        source: Faucet.berlin-soft;
+        width: parent.width;
+        height: parent.height;
+        opacity: root.awake ? 0 : 1;
+        animate opacity { duration: 700ms; easing: ease-out; }
+    }
+
+    if root.awake: Desk { }
+    if !root.awake: Cover { }
+
+    Rectangle {
+        background: #000000;
+        opacity: Faucet.owner-open ? 0.5 : 0;
+        animate opacity { duration: 220ms; easing: ease-out; }
+        if Faucet.owner-open: TouchArea {
+            clicked => { Settings.close(); }
+        }
+    }
+    OwnerSheet {
+        y: Faucet.owner-open ? BerlinLayout.ticker-h : Layout.screen;
+        animate y { duration: 260ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
+    }
+
+    // The ticker (with the settings gear) stays on top of everything, like the site's
+    Ticker {
+        x: 0;
+        y: 0;
+        width: parent.width;
+    }
+}

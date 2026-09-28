@@ -1,0 +1,52 @@
+// Pixel Faucet on the HyperPixel 4.0 Square: 720×720 at ~254 PPI, so 10px ≈ 1mm.
+// One faucet, two looks, picked under Settings (the gear, top right):
+// - Dusk (dusk.slint): the faucet's own look, inspired by umbrelOS
+// - bitcoin++ Berlin (berlin.slint): styled after btcpp.dev/berlin26
+// Both share the state (state.slint) and the helpers in common.slint.
+
+import "fonts/Inter-Medium.ttf";
+import "fonts/Inter-SemiBold.ttf";
+import "fonts/InterDisplay-SemiBold.ttf";
+import "fonts/InterDisplay-Bold.ttf";
+import "fonts/IBMPlexMono-Medium.ttf";
+import "fonts/IBMPlexMono-SemiBold.ttf";
+import "fonts/IBMPlexMono-Bold.ttf";
+import "fonts/IBMPlexSans-SemiBold.ttf";
+import "fonts/IBMPlexSans-Bold.ttf";
+import "fonts/SourceSerif4-It.ttf";
+import "fonts/Ubuntu-BoldItalic.ttf";
+import { Faucet, Phase, Theme } from "state.slint";
+import { Layout, Fmt, Trivia } from "common.slint";
+import { DuskLayout, DuskScreen } from "dusk.slint";
+import { BerlinLayout, BerlinScreen } from "berlin.slint";
+
+export { Faucet, Phase, Theme, Layout, DuskLayout, BerlinLayout, Fmt, Trivia }
+
+export component FaucetApp inherits Window {
+    width: Layout.screen;
+    height: Layout.screen;
+    title: Faucet.theme == Theme.berlin ? "Pixel Faucet · bitcoin++ Berlin, payments edition" : "Pixel Faucet";
+    background: #05071a;
+    default-font-family: Faucet.theme == Theme.berlin ? "IBM Plex Sans" : "Inter";
+
+    if Faucet.theme == Theme.dusk: DuskScreen { }
+    if Faucet.theme == Theme.berlin: BerlinScreen { }
+
+    // Trivia moves on every 8 seconds of pause
+    Timer {
+        interval: 250ms;
+        running: Faucet.phase == Phase.cooling;
+        triggered => {
+            Trivia.ticks += 1;
+            if Math.mod(Trivia.ticks, 32 * Trivia.facts.length) == 0 {
+                Trivia.round-done();
+            }
+        }
+    }
+    // The countdown's clock; the backend decides when the next token actually appears
+    Timer {
+        interval: 1s;
+        running: Faucet.phase == Phase.cooling && Faucet.cooldown-left > 0;
+        triggered => { Faucet.cooldown-left -= 1; }
+    }
+}

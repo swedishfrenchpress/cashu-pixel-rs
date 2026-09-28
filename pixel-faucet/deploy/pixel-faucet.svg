@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f1436"/>
+      <stop offset="0.5" stop-color="#2a1e55"/>
+      <stop offset="0.7" stop-color="#8a3a5a"/>
+      <stop offset="0.8" stop-color="#f0843d"/>
+      <stop offset="0.8" stop-color="#2a1630"/>
+      <stop offset="1" stop-color="#05060d"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.8" r="0.5">
+      <stop offset="0" stop-color="#ff9b45" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#ff8a3a" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#ff8a3a" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tile"><rect x="16" y="16" width="480" height="480" rx="112"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="16" y="16" width="480" height="480" fill="url(#sky)"/>
+    <rect x="16" y="16" width="480" height="480" fill="url(#sun)"/>
+    <rect x="16" y="398" width="480" height="4" fill="#ffd29a" opacity="0.8"/>
+  </g>
+  <path d="M 50 2 C 50 2 10 48 10 70 A 40 40 0 0 0 90 70 C 90 48 50 2 50 2 Z" transform="translate(156 104) scale(2)" fill="#F99B48"/>
+  <rect x="216" y="227" width="28" height="28" fill="#fff" fill-opacity="0.9"/>
+  <rect x="16.5" y="16.5" width="479" height="479" rx="111.5" fill="none" stroke="#fff" stroke-opacity="0.14"/>
+</svg>

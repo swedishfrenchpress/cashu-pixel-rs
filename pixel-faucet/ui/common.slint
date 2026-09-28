@@ -1,0 +1,96 @@
+// Shared by both themes: geometry Rust reads, number formatting, trivia, QR codes, the
+// settings gear, and closing the settings panel.
+
+import { Faucet } from "state.slint";
+
+export global Layout {
+    out property <length> screen: 720px;
+    // QR sizes, which Rust renders to exactly (never scaled by Slint): the main card's QR
+    // and the settings panel's refill QR, the same in both themes
+    out property <length> qr-size: 392px;
+    out property <length> sheet-qr-size: 296px;
+}
+
+export global Fmt {
+    // 1234567 → "1,234,567"
+    public pure function sats(n: int) -> string {
+        return n >= 1000000 ? "\{Math.floor(n / 1000000)},\{pad3(Math.mod(Math.floor(n / 1000), 1000))},\{pad3(Math.mod(n, 1000))}"
+            : n >= 1000 ? "\{Math.floor(n / 1000)},\{pad3(Math.mod(n, 1000))}"
+            : "\{n}";
+    }
+    public pure function unit(n: int) -> string {
+        return n == 1 ? "sat" : "sats";
+    }
+    // 75 → "1:15"
+    public pure function clock(secs: int) -> string {
+        return Math.mod(secs, 60) < 10 ? "\{Math.floor(secs / 60)}:0\{Math.mod(secs, 60)}" : "\{Math.floor(secs / 60)}:\{Math.mod(secs, 60)}";
+    }
+    // 7 → "07"
+    public pure function pad2(n: int) -> string {
+        return n < 10 ? "0\{n}" : "\{n}";
+    }
+    pure function pad3(n: int) -> string {
+        return n < 10 ? "00\{n}" : n < 100 ? "0\{n}" : "\{n}";
+    }
+}
+
+// Shown one at a time on the card during the pause between claims
+export global Trivia {
+    out property <[string]> facts: [
+        "David Chaum invented blind signatures in 1982: the cryptography that makes ecash private.",
+        "Chaum explained blind signatures with an envelope lined with carbon paper: you can sign the letter inside without ever reading it.",
+        "Chaum's company DigiCash put ecash in a real bank: from 1995, Mark Twain Bank in St. Louis let customers spend dollars online as private ecash.",
+        "DigiCash went bankrupt in 1998, a decade before Bitcoin. The idea of private digital cash outlived it.",
+        "In 1996, David Wagner adapted Chaum's scheme to Diffie-Hellman keys. Cashu is built on his version.",
+        "In 1988, Chaum, Fiat and Naor made ecash work offline: spend a coin twice and the math reveals who you are.",
+        "Cashu was founded in 2022.",
+        "Cashu's specifications are called NUTs: Notation, Usage and Terminology.",
+        "The mint signs your tokens blind. When they come back, it can't tell whose they were.",
+        "Ecash is a bearer asset: whoever holds the token owns the sats, just like a banknote.",
+        "Ecash is only as good as its mint, which holds the bitcoin behind it. Keep small amounts, like cash in a wallet.",
+        "Cashu tokens come in powers of two, like coins: 21 sats travel as a 16, a 4 and a 1.",
+        "Mints move bitcoin in and out over Lightning: paying an invoice mints ecash, and melting ecash pays one.",
+        "A Cashu token is just text. You can send it in a QR code, a chat message, over NFC, or printed on paper.",
+        "Tokens can be locked to a public key (NUT-11), so only the holder of the matching private key can redeem them.",
+        "Animated QR codes (NUT-16) split a token across frames, so big tokens still fit on a small screen.",
+        "Wallets can ask a mint whether a token has been spent (NUT-07). That's how this faucet knew you'd claimed yours.",
+        "This faucet is a Raspberry Pi Zero 2 W running CDK, the Cashu Development Kit, written in Rust.",
+    ];
+    // The order the facts appear in. Rust shuffles it at startup and again after every
+    // round; until then (and in snapshots) they go in list order.
+    in property <[int]> order;
+    // Every fact has been shown once
+    callback round-done();
+    // Moves on every 8 seconds of pause, picking up where it left off after the next claim
+    in-out property <int> ticks;
+    property <int> slot: Math.mod(Math.floor(self.ticks / 32), self.facts.length);
+    out property <int> index: self.order.length == self.facts.length ? self.order[self.slot] : self.slot;
+    // Fades out for the last quarter-second before the next fact
+    out property <bool> fading: Math.mod(self.ticks, 32) == 31;
+}
+
+// A QR code, drawn at its native size: Rust renders it to the exact pixel size, because
+// the software renderer drops rows and columns when it scales by a non-integer factor
+export component Qr inherits Image {
+    width: self.source.width * 1px;
+    height: self.source.height * 1px;
+    image-rendering: pixelated;
+}
+
+// The settings gear (24×24 artwork; set width, height and fill)
+export component Gear inherits Path {
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill-rule: evenodd;
+    commands: "M 20.07 10.06 L 23.09 10.42 L 23.09 13.58 L 20.07 13.94 L 19.08 16.34 L 20.96 18.72 L 18.72 20.96 L 16.34 19.08 L 13.94 20.07 L 13.58 23.09 L 10.42 23.09 L 10.06 20.07 L 7.66 19.08 L 5.28 20.96 L 3.04 18.72 L 4.92 16.34 L 3.93 13.94 L 0.91 13.58 L 0.91 10.42 L 3.93 10.06 L 4.92 7.66 L 3.04 5.28 L 5.28 3.04 L 7.66 4.92 L 10.06 3.93 L 10.42 0.91 L 13.58 0.91 L 13.94 3.93 L 16.34 4.92 L 18.72 3.04 L 20.96 5.28 L 19.08 7.66 Z M 15.30 12.00 A 3.3 3.3 0 1 0 8.70 12.00 A 3.3 3.3 0 1 0 15.30 12.00 Z";
+}
+
+export global Settings {
+    public function close() {
+        if Faucet.refill-view {
+            Faucet.close-refill();
+        }
+        Faucet.refill-view = false;
+        Faucet.owner-open = false;
+    }
+}

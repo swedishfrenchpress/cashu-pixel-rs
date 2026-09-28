@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "pixel-faucet"]
+
 [package]
 name = "cashu-pixel"
 version = "0.1.0"
