@@ -22,6 +22,30 @@ export enum Theme {
     berlin,
 }
 
+// A mint the faucet can move to, in Settings › Mint
+export struct MintOption {
+    host: string,
+    url: string,
+    // Sats the faucet's wallet holds there
+    sats: int,
+    // The mint the faucet uses now
+    current: bool,
+}
+
+// Where a mint switch has got to
+export enum MintStep {
+    // Choosing a mint
+    list,
+    // A mint is picked: switch, and move the sats?
+    confirm,
+    // Checking the mint and moving the sats
+    moving,
+    // Switched; `mint-note` says how it went
+    done,
+    // Didn't switch; `mint-note` says why
+    failed,
+}
+
 export global Faucet {
     in property <Phase> phase: Phase.starting;
 
@@ -57,6 +81,17 @@ export global Faucet {
     in property <int> drips-given;
     in property <int> sats-given;
     in property <string> mint-host;
+
+    // Settings › Mint: the mints to move to, the sats a switch would move, the step under
+    // way, the mint picked, and what happened. After a failed move the owner may switch
+    // anyway, leaving the sats at the old mint (`mint-can-force`).
+    in property <[MintOption]> mints;
+    in property <int> mint-movable;
+    in-out property <bool> mint-view;
+    in-out property <MintStep> mint-step;
+    in-out property <MintOption> mint-pick;
+    in property <string> mint-note;
+    in property <bool> mint-can-force;
     // A short line about the mint or wallet (offline, errors, reclaim results); empty when all is well
     in property <string> message;
 
@@ -79,5 +114,9 @@ export global Faucet {
     callback request-refill(int);
     callback close-refill();
     callback reclaim();
+    // Fill `mints`
+    callback open-mints();
+    // Move to the mint at this URL; true leaves the sats at the old mint
+    callback switch-mint(string, bool);
     callback exit-app();
 }

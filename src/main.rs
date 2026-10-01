@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -22,9 +22,14 @@ use tokio::sync::Mutex;
 slint::include_modules!();
 
 mod ble;
+#[path = "../shared/mints.rs"]
+mod mints;
 mod snapshot;
 
+/// The home mint until one is picked under Settings
 const MINT_URL: &str = "https://mint.minibits.cash/Bitcoin";
+/// Holds the picked home mint's URL, next to the wallet. A reset keeps it.
+const HOME_MINT_FILE: &str = "home-mint";
 
 /// Tokens up to this many characters fit one comfortably scannable static QR;
 /// longer ones are shown as an animated QR (NUT-16).
@@ -52,11 +57,6 @@ struct BleReceive {
     token: Option<Token>,
 }
 
-/// A mint URL as the screen shows it: host only
-fn mint_host(url: &str) -> String {
-    url.trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or(url).to_string()
-}
-
 /// The wallet: one CDK wallet per mint, all on the same seed and database
 struct AppWallet {
     /// The home mint. Lightning and payment requests receive here, and sends draw from it
@@ -70,6 +70,23 @@ struct AppWallet {
 }
 
 impl AppWallet {
+    /// Wallets for `home` and for every other mint the database holds ecash from, reachable
+    /// or not, so all of it counts in the balance
+    async fn open(
+        localstore: Arc<cdk_sqlite::wallet::WalletSqliteDatabase>,
+        seed: [u8; 64],
+        home: &MintUrl,
+    ) -> Result<AppWallet, Box<dyn std::error::Error + Send + Sync>> {
+        let wallet = Wallet::new(&home.to_string(), CurrencyUnit::Sat, localstore.clone(), seed, None)?;
+        let mut others: Vec<Wallet> = Vec::new();
+        for proof in localstore.get_proofs(None, None, None, None).await? {
+            if proof.mint_url != wallet.mint_url && !others.iter().any(|w| w.mint_url == proof.mint_url) {
+                others.push(Wallet::new(&proof.mint_url.to_string(), CurrencyUnit::Sat, localstore.clone(), seed, None)?);
+            }
+        }
+        Ok(AppWallet { wallet, others, localstore, seed, current_quote: None })
+    }
+
     /// Every mint's wallet, home first
     fn wallets(&self) -> impl Iterator<Item = &Wallet> {
         std::iter::once(&self.wallet).chain(self.others.iter())
@@ -102,6 +119,43 @@ impl AppWallet {
             self.others.push(wallet);
         }
     }
+
+    /// Make `wallet` the home mint. The old home stays on as another mint while the database
+    /// holds ecash from it.
+    async fn set_home(&mut self, wallet: Wallet) {
+        let mint = wallet.mint_url.clone();
+        let old = std::mem::replace(&mut self.wallet, wallet);
+        self.others.retain(|w| w.mint_url != mint);
+        let held = self.localstore.get_proofs(Some(old.mint_url.clone()), None, None, None).await;
+        if held.is_ok_and(|proofs| !proofs.is_empty()) {
+            self.others.push(old);
+        }
+    }
+
+    /// The mints to choose a home from: the offered ones, then any other this wallet holds
+    /// ecash from, each with the sats held there
+    async fn mint_choices(&self, data_dir: &Path) -> Vec<MintChoice> {
+        let mut mints = mints::offered(data_dir);
+        for wallet in self.wallets() {
+            if !mints.contains(&wallet.mint_url) {
+                mints.push(wallet.mint_url.clone());
+            }
+        }
+        let mut choices = Vec::new();
+        for mint in mints {
+            let mut sats = 0;
+            if let Some(wallet) = self.wallets().find(|w| w.mint_url == mint) {
+                sats = u64::from(wallet.total_balance().await.unwrap_or(Amount::ZERO));
+            }
+            choices.push(MintChoice {
+                host: SharedString::from(mints::host(&mint)),
+                url: SharedString::from(mint.to_string()),
+                sats: sats as i32,
+                home: mint == self.wallet.mint_url,
+            });
+        }
+        choices
+    }
 }
 
 /// Render a QR code as dark modules on a light field with a 4-module quiet zone,
@@ -131,9 +185,9 @@ fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
-/// Build a NUT-18 Cashu payment request for `amount` sat from our mint, delivered over
-/// Nostr to a fresh key. Returns the encoded request (`creqA…`) and the key to listen with.
-fn cashu_request(amount: u64) -> Result<(String, Keys), String> {
+/// Build a NUT-18 Cashu payment request for `amount` sat from `mint`, delivered over Nostr
+/// to a fresh key. Returns the encoded request (`creqA…`) and the key to listen with.
+fn cashu_request(amount: u64, mint: &MintUrl) -> Result<(String, Keys), String> {
     let keys = Keys::generate();
     let relays = NOSTR_RELAYS.iter().filter_map(|r| RelayUrl::parse(r).ok());
     let nprofile = Nip19Profile::new(keys.public_key(), relays)
@@ -150,7 +204,7 @@ fn cashu_request(amount: u64) -> Result<(String, Keys), String> {
         .amount(amount)
         .unit(CurrencyUnit::Sat)
         .single_use(true)
-        .add_mint(MintUrl::from_str(MINT_URL).map_err(|e| e.to_string())?)
+        .add_mint(mint.clone())
         .description("Cashu NERV")
         .add_transport(transport)
         .build();
@@ -168,13 +222,15 @@ fn show_received(ui_w: &slint::Weak<MainApp>, received: u64, balance: u64) {
     });
 }
 
-/// Listen on Nostr for ecash sent to a Cashu payment request and receive it into the wallet.
-/// Stops once the session is paid (either way), replaced by a newer one, or past `deadline`.
+/// Listen on Nostr for ecash sent to a Cashu payment request and receive it into `wallet`,
+/// the mint the request asked for. Stops once the session is paid (either way), replaced by
+/// a newer one, or past `deadline`.
 async fn watch_cashu_request(
     keys: Keys,
     session: u64,
     paid: Arc<AtomicBool>,
     deadline: u64,
+    wallet: Wallet,
     wallet_ref: Arc<Mutex<Option<AppWallet>>>,
     ui_w: slint::Weak<MainApp>,
 ) {
@@ -189,8 +245,6 @@ async fn watch_cashu_request(
         client.shutdown().await;
         return;
     }
-    let our_mint = MintUrl::from_str(MINT_URL).ok();
-
     while !paid.load(Ordering::SeqCst)
         && RECEIVE_SESSION.load(Ordering::SeqCst) == session
         && now_secs() < deadline
@@ -203,16 +257,18 @@ async fn watch_cashu_request(
         };
         let Ok(gift) = client.unwrap_gift_wrap(&event).await else { continue };
         let Ok(payload) = serde_json::from_str::<PaymentRequestPayload>(&gift.rumor.content) else { continue };
-        // Single-mint wallet: only ecash from our mint, in sat, can be received
-        if Some(&payload.mint) != our_mint.as_ref() || payload.unit != CurrencyUnit::Sat {
+        // Only ecash from the mint the request asked for, in sat
+        if payload.mint != wallet.mint_url || payload.unit != CurrencyUnit::Sat {
             continue;
         }
         let token = Token::new(payload.mint, payload.proofs, payload.memo, payload.unit);
 
-        let w = wallet_ref.lock().await;
-        let Some(ref app) = *w else { break };
-        match app.wallet.receive(&token.to_string(), ReceiveOptions::default()).await {
+        let mut w = wallet_ref.lock().await;
+        let Some(ref mut app) = *w else { break };
+        match wallet.receive(&token.to_string(), ReceiveOptions::default()).await {
             Ok(received) => {
+                // The home mint may have changed since the request was made
+                app.keep(wallet.clone());
                 let balance = app.balance().await;
                 drop(w);
                 if !paid.swap(true, Ordering::SeqCst) {
@@ -270,11 +326,34 @@ async fn reclaim_unclaimed(wallet: &Wallet) -> Result<ReclaimSummary, cdk::Error
     Ok(ReclaimSummary { sats: sats.into(), reclaimed, already_claimed, failed })
 }
 
-async fn open_wallets() -> Result<AppWallet, Box<dyn std::error::Error + Send + Sync>> {
-    let data_dir = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("cashu-pixel");
-    std::fs::create_dir_all(&data_dir)?;
+/// Where the wallet's database and seed live
+fn wallet_dir() -> PathBuf {
+    dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("cashu-pixel")
+}
+
+/// Erase the wallet in `data_dir`: its database, then its seed. The database must be closed.
+/// SQLite's side files go first, so a leftover one is never replayed into the next database,
+/// and the seed goes last, so ecash never outlives the seed it was made from.
+fn erase_wallet(data_dir: &Path) -> std::io::Result<()> {
+    for name in ["wallet.db-wal", "wallet.db-shm", "wallet.db", "seed"] {
+        match std::fs::remove_file(data_dir.join(name)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// The home mint picked under Settings, or the default
+fn home_mint(data_dir: &Path) -> MintUrl {
+    std::fs::read_to_string(data_dir.join(HOME_MINT_FILE))
+        .ok()
+        .and_then(|url| MintUrl::from_str(url.trim()).ok())
+        .unwrap_or_else(|| MintUrl::from_str(MINT_URL).expect("the default mint URL is valid"))
+}
+
+async fn open_wallets(data_dir: &Path) -> Result<AppWallet, Box<dyn std::error::Error + Send + Sync>> {
+    std::fs::create_dir_all(data_dir)?;
 
     let db_path = data_dir.join("wallet.db");
     let localstore = Arc::new(
@@ -294,19 +373,9 @@ async fn open_wallets() -> Result<AppWallet, Box<dyn std::error::Error + Send + 
         seed
     };
 
-    let wallet = Wallet::new(MINT_URL, CurrencyUnit::Sat, localstore.clone(), seed, None)?;
-    wallet.recover_incomplete_sagas().await?;
-
-    // A wallet for every other mint the database holds ecash from, reachable or not, so
-    // all of it counts in the balance
-    let mut others: Vec<Wallet> = Vec::new();
-    for proof in localstore.get_proofs(None, None, None, None).await? {
-        if proof.mint_url != wallet.mint_url && !others.iter().any(|w| w.mint_url == proof.mint_url) {
-            others.push(Wallet::new(&proof.mint_url.to_string(), CurrencyUnit::Sat, localstore.clone(), seed, None)?);
-        }
-    }
-
-    Ok(AppWallet { wallet, others, localstore, seed, current_quote: None })
+    let app = AppWallet::open(localstore, seed, &home_mint(data_dir)).await?;
+    app.wallet.recover_incomplete_sagas().await?;
+    Ok(app)
 }
 
 fn update_ui(ui_weak: &slint::Weak<MainApp>, f: impl FnOnce(&MainApp) + Send + 'static) {
@@ -342,17 +411,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wallet_ref = app_wallet.clone();
     let ui_w = ui_weak.clone();
     rt.spawn(async move {
-        match open_wallets().await {
+        match open_wallets(&wallet_dir()).await {
             Ok(app) => {
                 let balance = app.balance().await;
                 let others = app.others.len();
+                let home = mints::host(&app.wallet.mint_url);
                 let mut w = wallet_ref.lock().await;
                 *w = Some(app);
                 drop(w);
                 update_ui(&ui_w, move |ui| {
                     let state = ui.global::<WalletState>();
                     state.set_balance(SharedString::from(format!("{}", balance)));
-                    state.set_mint_url(SharedString::from(mint_host(MINT_URL)));
+                    state.set_mint_url(SharedString::from(home));
                     state.set_other_mints(others as i32);
                 });
 
@@ -401,7 +471,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         rt_h.spawn(async move {
             let mut w = wallet_ref.lock().await;
             let Some(ref mut app) = *w else { return };
-            let quote = match app.wallet.mint_quote(PaymentMethod::BOLT11, Some(Amount::from(amount as u64)), None, None).await {
+            // Both requests stay with this mint even if the home mint changes while they're open
+            let wallet = app.wallet.clone();
+            let quote = match wallet.mint_quote(PaymentMethod::BOLT11, Some(Amount::from(amount as u64)), None, None).await {
                 Ok(quote) => quote,
                 Err(e) => {
                     let msg = format!("ERROR: {}", e);
@@ -427,7 +499,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             // The Cashu request is optional: without it the screen still works over Lightning
-            let request = cashu_request(amount as u64)
+            let request = cashu_request(amount as u64, &wallet.mint_url)
                 .ok()
                 .and_then(|(encoded, keys)| qr_pixels(&encoded).ok().map(|pixels| (pixels, keys)));
             let request_available = request.is_some();
@@ -462,6 +534,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     session,
                     paid.clone(),
                     deadline,
+                    wallet.clone(),
                     wallet_ref.clone(),
                     ui_w.clone(),
                 ));
@@ -486,14 +559,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     });
                     return;
                 }
-                match app.wallet.check_mint_quote_status(&quote_id).await {
+                match wallet.check_mint_quote_status(&quote_id).await {
                     Ok(q) if q.state == MintQuoteState::Paid => {}
                     // Unpaid, or a transient network error: keep waiting
                     _ => continue,
                 }
-                match app.wallet.mint(&quote_id, Default::default(), None).await {
+                match wallet.mint(&quote_id, Default::default(), None).await {
                     Ok(_) => {
                         app.current_quote = None;
+                        app.keep(wallet.clone());
                         let balance = app.balance().await;
                         if !paid.swap(true, Ordering::SeqCst) {
                             show_received(&ui_w, amount as u64, balance);
@@ -607,7 +681,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match qr_pixels(&first_frame) {
                 Ok(pixels) => {
                     let status = if mint != home {
-                        format!("SCAN TO RECEIVE {} SAT // {}", amount, mint_host(&mint.to_string()).to_uppercase())
+                        format!("SCAN TO RECEIVE {} SAT // {}", amount, mints::host(&mint).to_uppercase())
                     } else if animated {
                         format!("SCAN TO RECEIVE {} SAT // ANIMATED QR", amount)
                     } else {
@@ -686,7 +760,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ble::Event::Token(token) if !holding => {
                         let amount: u64 = token.value().map(u64::from).unwrap_or(0);
                         let mint = token.mint_url().ok();
-                        let host = mint.as_ref().map(|m| mint_host(&m.to_string())).unwrap_or_default();
+                        let host = mint.as_ref().map(mints::host).unwrap_or_default();
                         let memo = token.memo().clone().unwrap_or_default();
                         // Any mint will do; the wallet holds sat only (tokens without a unit are sat)
                         let unit = token.unit().unwrap_or(CurrencyUnit::Sat);
@@ -879,6 +953,131 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
+    // Home mint (Settings): list the mints to choose from, each with the sats held there
+    let wallet_ref = app_wallet.clone();
+    let ui_w = ui_weak.clone();
+    let rt_h = rt.handle().clone();
+    ui.global::<WalletState>().on_load_mints(move || {
+        let wallet_ref = wallet_ref.clone();
+        let ui_w = ui_w.clone();
+        rt_h.spawn(async move {
+            let w = wallet_ref.lock().await;
+            let Some(ref app) = *w else { return };
+            let choices = app.mint_choices(&wallet_dir()).await;
+            drop(w);
+            update_ui(&ui_w, move |ui| {
+                ui.global::<WalletState>().set_mints(slint::ModelRc::new(slint::VecModel::from(choices)));
+            });
+        });
+    });
+
+    // Make the picked mint the home mint, once it answers and can issue sat over Lightning.
+    // Ecash already held stays at its own mint and still counts.
+    let wallet_ref = app_wallet.clone();
+    let ui_w = ui_weak.clone();
+    let rt_h = rt.handle().clone();
+    ui.global::<WalletState>().on_set_home_mint(move |url| {
+        let wallet_ref = wallet_ref.clone();
+        let ui_w = ui_w.clone();
+        rt_h.spawn(async move {
+            let picked = MintUrl::from_str(&url).map_err(|e| e.to_string());
+            let checked = match picked {
+                Ok(mint) => {
+                    // Checked without holding the wallet: the mint may take a while to answer
+                    let candidate = {
+                        let w = wallet_ref.lock().await;
+                        w.as_ref().map(|app| app.wallet_for(&mint).map_err(|e| e.to_string()))
+                    };
+                    match candidate {
+                        Some(Ok(wallet)) => mints::check(&wallet).await.map(|()| wallet),
+                        Some(Err(e)) => Err(e),
+                        None => Err("the wallet isn't open".to_string()),
+                    }
+                }
+                Err(e) => Err(e),
+            };
+
+            let data_dir = wallet_dir();
+            let mut w = wallet_ref.lock().await;
+            let Some(ref mut app) = *w else {
+                update_ui(&ui_w, |ui| {
+                    let state = ui.global::<WalletState>();
+                    state.set_mint_busy(false);
+                    state.set_status(SharedString::from("THE WALLET ISN'T OPEN"));
+                });
+                return;
+            };
+            let status = match checked {
+                Ok(wallet) => {
+                    let host = mints::host(&wallet.mint_url).to_uppercase();
+                    match std::fs::write(data_dir.join(HOME_MINT_FILE), wallet.mint_url.to_string()) {
+                        Ok(()) => {
+                            app.set_home(wallet).await;
+                            format!("HOME MINT NOW {}", host)
+                        }
+                        Err(e) => format!("COULD NOT SAVE THE HOME MINT: {}", e),
+                    }
+                }
+                Err(e) => format!("CAN'T USE {}: {}", url.trim_start_matches("https://").to_uppercase(), e.to_uppercase()),
+            };
+            let choices = app.mint_choices(&data_dir).await;
+            let (home, others) = (mints::host(&app.wallet.mint_url), app.others.len());
+            drop(w);
+            update_ui(&ui_w, move |ui| {
+                let state = ui.global::<WalletState>();
+                state.set_mints(slint::ModelRc::new(slint::VecModel::from(choices)));
+                state.set_mint_url(SharedString::from(home));
+                state.set_other_mints(others as i32);
+                state.set_mint_busy(false);
+                state.set_status(SharedString::from(status));
+            });
+        });
+    });
+
+    // Reset (Settings): erase the wallet and start a new, empty one on a new seed
+    let wallet_ref = app_wallet.clone();
+    let ui_w = ui_weak.clone();
+    let rt_h = rt.handle().clone();
+    ui.global::<WalletState>().on_reset_device(move || {
+        let wallet_ref = wallet_ref.clone();
+        let ui_w = ui_w.clone();
+        rt_h.spawn(async move {
+            // Anything still watching an open receive request stops
+            RECEIVE_SESSION.fetch_add(1, Ordering::SeqCst);
+            let mut w = wallet_ref.lock().await;
+            let data_dir = wallet_dir();
+            // The database closes when the last wallet on it is dropped, and only then can
+            // its files go: closed late, SQLite would delete the new database's log instead
+            let store = w.take().map(|app| app.localstore);
+            let open_elsewhere = store.as_ref().is_some_and(|store| Arc::strong_count(store) > 1);
+            drop(store);
+            let erased = if open_elsewhere {
+                Err(std::io::Error::other("WALLET BUSY // TRY AGAIN"))
+            } else {
+                erase_wallet(&data_dir)
+            };
+            // Open a wallet either way, so the app keeps working if the erase failed
+            let opened = open_wallets(&data_dir).await;
+            let status = match (&erased, &opened) {
+                (Ok(()), Ok(_)) => "DEVICE RESET // NEW EMPTY WALLET".to_string(),
+                (Err(e), _) => format!("RESET ERROR: {}", e),
+                (_, Err(e)) => format!("RESET ERROR: {}", e),
+            };
+            let (balance, others) = match &opened {
+                Ok(app) => (app.balance().await, app.others.len()),
+                Err(_) => (0, 0),
+            };
+            *w = opened.ok();
+            drop(w);
+            update_ui(&ui_w, move |ui| {
+                let state = ui.global::<WalletState>();
+                state.set_balance(SharedString::from(format!("{}", balance)));
+                state.set_other_mints(others as i32);
+                state.set_status(SharedString::from(status));
+            });
+        });
+    });
+
     // Exit (Settings): close the window and end the process, back to the desktop
     ui.global::<WalletState>().on_exit_app(|| {
         let _ = slint::quit_event_loop();
@@ -886,4 +1085,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     ui.run()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_reset_leaves_a_new_empty_wallet_on_a_new_seed() {
+        let dir = std::env::temp_dir().join(format!("cashu-pixel-test-{:08x}", rand::random::<u32>()));
+        let (store, old_seed) = {
+            let app = open_wallets(&dir).await.unwrap();
+            (app.localstore.clone(), app.seed)
+        };
+        assert!(dir.join("wallet.db").exists() && dir.join("seed").exists());
+
+        // What the reset relies on: with the wallets gone, nothing else holds the database
+        assert_eq!(Arc::strong_count(&store), 1);
+        drop(store);
+
+        erase_wallet(&dir).unwrap();
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        // Nothing left to erase is fine too
+        erase_wallet(&dir).unwrap();
+
+        let app = open_wallets(&dir).await.unwrap();
+        assert_ne!(app.seed, old_seed);
+        assert_eq!(app.balance().await, 0);
+        assert!(app.others.is_empty());
+
+        drop(app);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

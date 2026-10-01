@@ -13,13 +13,15 @@ The apps render the screenshots below themselves, with sample data (see [Screens
 |:-:|:-:|:-:|
 | <img src="docs/screenshots/nerv-home.png" width="260" alt="Home screen: 1234 sat balance with Send and Receive"> | <img src="docs/screenshots/nerv-receive.png" width="260" alt="Receive screen: amount presets and Receive over Bluetooth"> | <img src="docs/screenshots/nerv-bluetooth.png" width="260" alt="Bluetooth screen advertising as Cashu NERV"> |
 | **Token found** | **Redeemed** | **Settings** |
-| <img src="docs/screenshots/nerv-bluetooth-token.png" width="260" alt="Incoming 21 sat token with Discard and Redeem"> | <img src="docs/screenshots/nerv-received.png" width="260" alt="21 sat in your wallet"> | <img src="docs/screenshots/nerv-settings.png" width="260" alt="Settings: balance, mints, Reclaim tokens, Exit to desktop"> |
+| <img src="docs/screenshots/nerv-bluetooth-token.png" width="260" alt="Incoming 21 sat token with Discard and Redeem"> | <img src="docs/screenshots/nerv-received.png" width="260" alt="21 sat in your wallet"> | <img src="docs/screenshots/nerv-settings.png" width="260" alt="Settings: balance, home mint with Change, Reclaim tokens, Exit to desktop, Reset device"> |
 
-- **Receive:** pick an amount. One tap makes both a Lightning invoice and a Cashu payment request (NUT-18) for it, and the screen toggles between the two. Both are watched at once, and the first payment completes the screen. Lightning invoices are checked every 2 seconds and minted automatically. Payment requests ask for Minibits ecash and arrive over Nostr (NIP-17) through relay.damus.io and nos.lol.
+- **Receive:** pick an amount. One tap makes both a Lightning invoice and a Cashu payment request (NUT-18) for it, and the screen toggles between the two. Both are watched at once, and the first payment completes the screen. Lightning invoices are checked every 2 seconds and minted automatically. Payment requests ask for ecash from the home mint and arrive over Nostr (NIP-17) through relay.damus.io and nos.lol.
 - **Bluetooth receive:** the Pi advertises as "Cashu NERV" with the Nordic UART Service. On a phone, connect with any BLE terminal app (Serial Bluetooth Terminal, nRF Toolbox, LightBlue), paste a `cashuA…` or `cashuB…` token and send it. The screen shows the amount, mint and memo, and redeems the token when you tap REDEEM. No pairing is needed.
-- **Any mint:** ecash stays at the mint it came from. Minibits is the home mint, where Lightning and payment requests are received. Only sat tokens are accepted.
+- **Any mint:** ecash stays at the mint it came from. The home mint is where Lightning and payment requests are received. Only sat tokens are accepted.
+- **Home mint:** Minibits until you pick another under Settings › CHANGE, from the [mint list](#mint-list) plus any mint the wallet holds ecash from. A mint is checked before it becomes home: it has to answer and handle sat over Lightning. Ecash already held stays where it is and still counts. The choice is saved in `~/.local/share/cashu-pixel/home-mint`, and RESET DEVICE keeps it.
 - **Send:** pick an amount and the screen shows an ecash token as a QR code. The token comes from the home mint when it holds enough, otherwise from the mint holding the most. Tokens over 320 characters are shown as an animated QR code (NUT-16).
-- **Settings:** the balance and mints, RECLAIM TOKENS (takes back sent tokens nobody claimed) and EXIT TO DESKTOP.
+- **Settings:** the balance, the home mint (CHANGE picks another), RECLAIM TOKENS (takes back sent tokens nobody claimed), EXIT TO DESKTOP and RESET DEVICE.
+- **Reset:** RESET DEVICE erases the seed and `wallet.db` and starts a new, empty wallet. It asks first, shows the sats that would be lost, and only goes ahead after HOLD TO ERASE has been held for 3 seconds. There is no seed backup, so ecash still on the device is gone for good.
 
 The seed and `wallet.db` live in `~/.local/share/cashu-pixel`.
 
@@ -29,15 +31,20 @@ The seed and `wallet.db` live in `~/.local/share/cashu-pixel`.
 |:-:|:-:|:-:|
 | <img src="docs/screenshots/faucet-dusk-claim.png" width="260" alt="Dusk theme: Scan to claim 21 sats, with a token QR"> | <img src="docs/screenshots/faucet-dusk-pause.png" width="260" alt="Dusk theme: Next drip in 0:42, with a Cashu fact"> | <img src="docs/screenshots/faucet-dusk-refill.png" width="260" alt="Dusk theme: The faucet is dry, with a Lightning invoice QR"> |
 | **bitcoin++ theme** | **bitcoin++ pause** | **Settings** |
-| <img src="docs/screenshots/faucet-bitcoinpp-claim.png" width="260" alt="bitcoin++ Berlin theme: Scan. Get 21 sats."> | <img src="docs/screenshots/faucet-bitcoinpp-pause.png" width="260" alt="bitcoin++ Berlin theme: Next drip in 00m 42s"> | <img src="docs/screenshots/faucet-settings.png" width="260" alt="Settings: sats per drip, pause, QR code, theme, refill"> |
+| <img src="docs/screenshots/faucet-bitcoinpp-claim.png" width="260" alt="bitcoin++ Berlin theme: Scan. Get 21 sats."> | <img src="docs/screenshots/faucet-bitcoinpp-pause.png" width="260" alt="bitcoin++ Berlin theme: Next drip in 00m 42s"> | <img src="docs/screenshots/faucet-settings.png" width="260" alt="Settings: sats per drip, pause, QR code, theme, mint, refill"> |
 
 The screen always shows one token, 21 sats by default. After someone claims it, the faucet pauses (1 minute by default) so one person can't empty it. The countdown runs in the headline while the card shows Cashu trivia, and then the next token appears. When the faucet runs dry, it shows a Lightning invoice that anyone can pay to refill it.
 
-- **Own wallet:** kept in `~/.local/share/pixel-faucet`, apart from Cashu NERV's. The mint is Minibits.
+- **Own wallet:** kept in `~/.local/share/pixel-faucet`, apart from Cashu NERV's.
+- **Mint:** Minibits until you pick another under Settings › Mint, from the [mint list](#mint-list). The faucet checks the new mint, then moves its sats there over Lightning (the old mint pays an invoice from the new one, less the Lightning fee). If the payment fails, the faucet stays put, and you can switch anyway and leave the sats behind.
 - **Two themes:** **Dusk**, the faucet's own look inspired by umbrelOS, and **bitcoin++ Berlin**, styled after [btcpp.dev/berlin26](https://btcpp.dev/berlin26). Pick one under Settings.
-- **Settings:** the gear at the top right. It sets the sats per drip, the pause, an animated or static QR code, and the theme. It can also refill over Lightning, take back unclaimed tokens, or exit to the desktop.
+- **Settings:** the gear at the top right. It sets the sats per drip, the pause, an animated or static QR code, the theme and the mint. It can also refill over Lightning, take back unclaimed tokens, or exit to the desktop.
 
 More detail is in [pixel-faucet/README.md](pixel-faucet/README.md). The bitcoin++ name, wordmark and market artwork belong to bitcoin++.
+
+## Mint list
+
+Both apps offer the mints in [`shared/known-mints.txt`](shared/known-mints.txt): Minibits, Macadamia and antifiat.cash. To offer more on one device, list them one URL per line in `mints.txt` in that app's data directory (`~/.local/share/cashu-pixel/` or `~/.local/share/pixel-faucet/`).
 
 ## Hardware
 

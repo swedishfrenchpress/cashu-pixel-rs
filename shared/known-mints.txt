@@ -1,0 +1,9 @@
+# The mints Cashu NERV and Pixel Faucet offer under Settings, in this order.
+# Each one answered on 2026-10-01 and mints and melts sat over Lightning (NUT-04, NUT-05).
+# Being listed is not an endorsement: a mint holds the bitcoin behind its ecash.
+#
+# One URL per line; # starts a comment. To offer more mints on one device, list them the
+# same way in mints.txt in that app's data directory (~/.local/share/<app>/mints.txt).
+https://mint.minibits.cash/Bitcoin
+https://mint.macadamia.cash
+https://antifiat.cash

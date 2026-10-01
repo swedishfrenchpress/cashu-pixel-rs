@@ -1,7 +1,7 @@
 // Shared by both themes: geometry Rust reads, number formatting, trivia, QR codes, the
 // settings gear, and closing the settings panel.
 
-import { Faucet } from "state.slint";
+import { Faucet, MintStep } from "state.slint";
 
 export global Layout {
     out property <length> screen: 720px;
@@ -91,6 +91,27 @@ export global Settings {
             Faucet.close-refill();
         }
         Faucet.refill-view = false;
+        Faucet.mint-view = false;
+        // A switch under way carries on, and shows again when the mint view reopens
+        if Faucet.mint-step != MintStep.moving {
+            Faucet.mint-step = MintStep.list;
+        }
         Faucet.owner-open = false;
+    }
+
+    public function open-mints() {
+        Faucet.mint-view = true;
+        if Faucet.mint-step != MintStep.moving {
+            Faucet.mint-step = MintStep.list;
+        }
+        Faucet.open-mints();
+    }
+
+    // Back from the mint view to Settings
+    public function close-mints() {
+        Faucet.mint-view = false;
+        if Faucet.mint-step != MintStep.moving {
+            Faucet.mint-step = MintStep.list;
+        }
     }
 }

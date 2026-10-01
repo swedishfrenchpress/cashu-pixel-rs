@@ -2,6 +2,7 @@
 //! A token stays on screen until someone scans and claims it; then the next one appears.
 //! When the balance runs below one drip, the screen shows a Lightning invoice to refill it.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -9,8 +10,10 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use cdk::cdk_database::WalletDatabase;
+use cdk::mint_url::MintUrl;
 use cdk::nuts::nut00::PaymentMethod;
-use cdk::nuts::{CurrencyUnit, MintQuoteState, Token};
+use cdk::nuts::{CurrencyUnit, MeltQuoteState, MintQuoteState, State, Token};
 use cdk::wallet::{SendMemo, SendOptions, Wallet};
 use cdk::Amount;
 use serde::{Deserialize, Serialize};
@@ -22,8 +25,11 @@ use uuid::Uuid;
 slint::include_modules!();
 
 mod backdrop;
+#[path = "../../shared/mints.rs"]
+mod mints;
 mod snapshot;
 
+/// The mint until the owner picks another under Settings
 const MINT_URL: &str = "https://mint.minibits.cash/Bitcoin";
 /// Sats per token until the owner picks another amount
 const DEFAULT_DRIP: u64 = 21;
@@ -42,6 +48,8 @@ const CELEBRATE_MS: u64 = 4000;
 const REFILL_TTL_SECS: u64 = 600;
 /// Failed mint checks in a row before the screen says the mint is unreachable
 const OFFLINE_AFTER: u32 = 3;
+/// How long a mint switch waits for the new mint to see its invoice paid before minting
+const ARRIVAL_WAIT_SECS: u64 = 20;
 
 /// With animated QR codes on, tokens longer than this animate (NUT-16); shorter ones are
 /// easy to scan as one static code anyway
@@ -53,6 +61,19 @@ const QR_FRAME_MS: u64 = 200;
 
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// 4221 → "4,221", as the screens write sats
+fn sats(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, digit) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
 }
 
 fn data_dir() -> PathBuf {
@@ -147,7 +168,10 @@ fn encode_without_dleq(token: &Token) -> String {
     }
 }
 
-async fn open_wallet() -> Result<Wallet, Box<dyn std::error::Error + Send + Sync>> {
+type Store = Arc<cdk_sqlite::wallet::WalletSqliteDatabase>;
+
+/// The faucet's wallet at `mint`, with the database and seed it shares with every other mint
+async fn open_wallet(mint: &str) -> Result<(Wallet, Store, [u8; 64]), Box<dyn std::error::Error + Send + Sync>> {
     let dir = data_dir();
     std::fs::create_dir_all(&dir)?;
 
@@ -163,10 +187,74 @@ async fn open_wallet() -> Result<Wallet, Box<dyn std::error::Error + Send + Sync
         std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&seed_path)?.write_all(&seed)?;
     }
 
-    let wallet = Wallet::new(MINT_URL, CurrencyUnit::Sat, localstore, seed, None)?;
+    let wallet = Wallet::new(mint, CurrencyUnit::Sat, localstore.clone(), seed, None)?;
     // Settles interrupted operations. Unclaimed tokens stay pending; claimed ones are closed.
     wallet.recover_incomplete_sagas().await?;
-    Ok(wallet)
+    Ok((wallet, localstore, seed))
+}
+
+/// What moving the faucet's sats to another mint came to
+#[derive(Default)]
+struct Moved {
+    arrived: u64,
+    fees: u64,
+    /// Sats still at the old mint: change from the Lightning fee reserve, or too few to move
+    left: u64,
+}
+
+enum MoveError {
+    /// Nothing left the old mint
+    Unpaid(String),
+    /// The old mint paid (or is still paying) the new mint's invoice, but the new mint hasn't
+    /// issued the sats yet
+    Unminted { quote_id: String, expires: u64, reason: String },
+}
+
+/// Move everything `from` holds to `to` over Lightning: `to` issues an invoice, and `from`
+/// pays it, the Lightning fee coming off the amount
+async fn move_sats(from: &Wallet, to: &Wallet) -> Result<Moved, MoveError> {
+    let unpaid = |e: cdk::Error| MoveError::Unpaid(e.to_string());
+    let held: u64 = from.total_balance().await.map_err(unpaid)?.into();
+    let mut amount = held;
+    // Each round asks for a smaller invoice until the amount and its fee fit what's held
+    for _ in 0..4 {
+        if amount == 0 {
+            return Ok(Moved { left: held, ..Default::default() });
+        }
+        let invoice = to.mint_quote(PaymentMethod::BOLT11, Some(Amount::from(amount)), None, None).await.map_err(unpaid)?;
+        let quote = from.melt_quote(PaymentMethod::BOLT11, &invoice.request, None, None).await.map_err(unpaid)?;
+        let reserve: u64 = quote.fee_reserve.into();
+        if amount + reserve > held {
+            amount = held.saturating_sub(reserve);
+            continue;
+        }
+        let prepared = match from.prepare_melt(&quote.id, HashMap::new()).await {
+            Ok(prepared) => prepared,
+            // The old mint's own fee on spending ecash doesn't fit either: ask for a bit less
+            Err(cdk::Error::InsufficientFunds) => {
+                amount = amount.saturating_sub((amount / 100).max(1));
+                continue;
+            }
+            Err(e) => return Err(unpaid(e)),
+        };
+        let unminted = |reason: String| MoveError::Unminted { quote_id: invoice.id.clone(), expires: invoice.expiry, reason };
+        let melted = prepared.confirm().await.map_err(unpaid)?;
+        match melted.state() {
+            MeltQuoteState::Paid => {}
+            MeltQuoteState::Pending | MeltQuoteState::Unknown => return Err(unminted("the Lightning payment is still pending".to_string())),
+            state => return Err(MoveError::Unpaid(format!("the Lightning payment came back {}", state))),
+        }
+        for _ in 0..ARRIVAL_WAIT_SECS / 2 {
+            match to.check_mint_quote_status(&invoice.id).await {
+                Ok(q) if q.state == MintQuoteState::Paid => break,
+                _ => tokio::time::sleep(Duration::from_secs(2)).await,
+            }
+        }
+        to.mint(&invoice.id, Default::default(), None).await.map_err(|e| unminted(e.to_string()))?;
+        let left: u64 = from.total_balance().await.map(u64::from).unwrap_or(0);
+        return Ok(Moved { arrived: amount, fees: held.saturating_sub(amount + left), left });
+    }
+    Err(MoveError::Unpaid("the sats don't cover the Lightning fee".to_string()))
 }
 
 /// A token handed out by the faucet
@@ -189,6 +277,8 @@ struct Saved {
     animated: bool,
     /// The look: "dusk" or "berlin"
     theme: String,
+    /// The mint tokens and refills come from
+    mint: String,
     drips_given: u64,
     sats_given: u64,
     /// The token on screen, so a restart shows the same one instead of leaving it outstanding
@@ -220,7 +310,16 @@ fn shuffled_facts(count: usize, last: Option<i32>) -> slint::ModelRc<i32> {
 
 impl Default for Saved {
     fn default() -> Self {
-        Saved { drip: DEFAULT_DRIP, cooldown: DEFAULT_COOLDOWN_SECS, animated: true, theme: "dusk".to_string(), drips_given: 0, sats_given: 0, current: None }
+        Saved {
+            drip: DEFAULT_DRIP,
+            cooldown: DEFAULT_COOLDOWN_SECS,
+            animated: true,
+            theme: "dusk".to_string(),
+            mint: MINT_URL.to_string(),
+            drips_given: 0,
+            sats_given: 0,
+            current: None,
+        }
     }
 }
 
@@ -321,6 +420,9 @@ enum Cmd {
     Refill(u64),
     CloseRefill,
     Reclaim,
+    ListMints,
+    /// Move to another mint, taking the sats along over Lightning unless `leave_sats`
+    SwitchMint { url: String, leave_sats: bool },
 }
 
 /// A Lightning invoice being watched for payment
@@ -331,8 +433,16 @@ struct Refill {
     by_owner: bool,
 }
 
+/// Sats moved from the old mint that the new one hasn't issued yet
+struct Arriving {
+    quote_id: String,
+    expires: u64,
+}
+
 struct Dispenser {
     wallet: Wallet,
+    localstore: Store,
+    seed: [u8; 64],
     saved: Saved,
     path: PathBuf,
     screen: Screen,
@@ -344,6 +454,7 @@ struct Dispenser {
     /// Whether the countdown to the next token is on screen
     resting: bool,
     failures: u32,
+    arriving: Option<Arriving>,
 }
 
 impl Dispenser {
@@ -490,6 +601,8 @@ impl Dispenser {
                     });
                 }
             }
+            Cmd::ListMints => self.list_mints().await,
+            Cmd::SwitchMint { url, leave_sats } => self.switch_mint(&url, leave_sats).await,
             Cmd::Reclaim => {
                 let before = self.balance().await;
                 self.take_back_current().await;
@@ -522,7 +635,148 @@ impl Dispenser {
         }
     }
 
+    /// Fill the mint list: the offered mints, then any other the wallet holds sats at
+    async fn list_mints(&self) {
+        let mut urls = mints::offered(&data_dir());
+        let held = self.localstore.get_proofs(None, Some(CurrencyUnit::Sat), Some(vec![State::Unspent]), None).await;
+        for mint in std::iter::once(self.wallet.mint_url.clone()).chain(held.unwrap_or_default().into_iter().map(|p| p.mint_url)) {
+            if !urls.contains(&mint) {
+                urls.push(mint);
+            }
+        }
+        let mut options = Vec::new();
+        for mint in urls {
+            let sats = self.localstore.get_balance(Some(mint.clone()), Some(CurrencyUnit::Sat), Some(vec![State::Unspent])).await.unwrap_or(0);
+            options.push(MintOption {
+                host: SharedString::from(mints::host(&mint)),
+                url: SharedString::from(mint.to_string()),
+                sats: sats as i32,
+                current: mint == self.wallet.mint_url,
+            });
+        }
+        // What a switch would move: the balance, plus the token on screen once it's taken back
+        let movable = (self.balance().await + self.saved.current.as_ref().map_or(0, |d| d.amount)) as i32;
+        self.screen.update(move |f| {
+            f.set_mints(slint::ModelRc::new(slint::VecModel::from(options)));
+            f.set_mint_movable(movable);
+        });
+    }
+
+    /// Move the faucet to another mint, its sats moving along over Lightning. If the move
+    /// fails before any sats leave, the faucet stays where it is and the owner may switch
+    /// anyway, leaving the sats behind.
+    async fn switch_mint(&mut self, url: &str, leave_sats: bool) {
+        let screen = self.screen.clone();
+        let step = |step: MintStep, note: String, can_force: bool| {
+            let note = SharedString::from(note);
+            screen.update(move |f| {
+                f.set_mint_note(note);
+                f.set_mint_can_force(can_force);
+                f.set_mint_step(step);
+            });
+        };
+        let target = match MintUrl::from_str(url).map_err(|e| e.to_string()).and_then(|mint| {
+            Wallet::new(&mint.to_string(), CurrencyUnit::Sat, self.localstore.clone(), self.seed, None).map_err(|e| e.to_string())
+        }) {
+            Ok(target) => target,
+            Err(e) => return step(MintStep::Failed, format!("That isn't a mint URL: {}", e), false),
+        };
+        let (old, new) = (mints::host(&self.wallet.mint_url), mints::host(&target.mint_url));
+        if target.mint_url == self.wallet.mint_url {
+            return step(MintStep::Done, format!("The faucet already uses {}.", new), false);
+        }
+
+        step(MintStep::Moving, format!("Checking {}…", new), false);
+        if let Err(e) = mints::check(&target).await {
+            return step(MintStep::Failed, format!("{} can't be used: {}.", new, e), false);
+        }
+
+        // No more tokens or refills from the old mint; a refill paid there joins the move
+        self.refill = None;
+        self.screen.update(|f| f.set_refill_ready(false));
+        self.take_back_current().await;
+        // Not taken back because someone just claimed it: count the claim
+        if let (Some(drip), Some(op)) = (self.saved.current.clone(), self.current_op()) {
+            if matches!(self.wallet.check_send_status(op).await, Ok(true)) {
+                self.count_claim(&drip);
+                self.saved.store(&self.path);
+            }
+        }
+        let _ = self.wallet.mint_unissued_quotes().await;
+
+        let moved = if leave_sats {
+            Ok(Moved { left: self.balance().await, ..Default::default() })
+        } else {
+            step(MintStep::Moving, format!("Moving {} sats to {}…", sats(self.balance().await), new), false);
+            move_sats(&self.wallet, &target).await
+        };
+        let note = match moved {
+            Ok(Moved { arrived: 0, left: 0, .. }) => format!("The faucet now uses {}.", new),
+            Ok(Moved { arrived: 0, left, .. }) => format!("The faucet now uses {}. {} sats stay at {}.", new, sats(left), old),
+            Ok(Moved { arrived, fees, left }) => {
+                let mut note = format!("{} sats moved to {}, {} in fees.", sats(arrived), new, sats(fees));
+                if left > 0 {
+                    note += &format!(" {} sats of change stay at {}.", sats(left), old);
+                }
+                note
+            }
+            Err(MoveError::Unpaid(reason)) => {
+                let held = self.balance().await;
+                self.next_drip_at = Instant::now();
+                return step(
+                    MintStep::Failed,
+                    format!("Couldn't move the sats: {}. Still on {}. Switching anyway leaves {} sats there.", reason, old, sats(held)),
+                    true,
+                );
+            }
+            Err(MoveError::Unminted { quote_id, expires, reason }) => {
+                self.arriving = Some(Arriving { quote_id, expires: expires.max(now_secs() + REFILL_TTL_SECS) });
+                format!("{} paid {}, which hasn't issued the sats yet ({}). The faucet keeps checking.", old, new, reason)
+            }
+        };
+
+        // A token that couldn't be taken back stays out at the old mint
+        self.saved.current = None;
+        *self.screen.anim.lock().unwrap() = None;
+        self.saved.mint = target.mint_url.to_string();
+        self.saved.store(&self.path);
+        self.wallet = target;
+        self.failures = 0;
+        self.claimed_at = None;
+        self.resting = false;
+        self.next_drip_at = Instant::now();
+        let host = SharedString::from(new);
+        self.screen.update(move |f| {
+            f.set_mint_host(host);
+            f.set_message(SharedString::default());
+        });
+        step(MintStep::Done, note, false);
+        self.show_stats().await;
+        self.list_mints().await;
+    }
+
+    /// Mint the sats a switch moved here once the new mint sees its invoice paid
+    async fn check_arriving(&mut self) {
+        let Some(arriving) = &self.arriving else { return };
+        if now_secs() > arriving.expires {
+            self.arriving = None;
+            return;
+        }
+        let quote_id = arriving.quote_id.clone();
+        match self.wallet.check_mint_quote_status(&quote_id).await {
+            Ok(quote) if quote.state == MintQuoteState::Paid => {}
+            _ => return,
+        }
+        if self.wallet.mint(&quote_id, Default::default(), None).await.is_ok() {
+            self.arriving = None;
+            self.next_drip_at = Instant::now();
+            self.screen.message("The moved sats have arrived");
+            self.show_stats().await;
+        }
+    }
+
     async fn step(&mut self) {
+        self.check_arriving().await;
         self.check_refill().await;
 
         if let Some(drip) = self.saved.current.clone() {
@@ -717,8 +971,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         trivia.set_order(shuffled_facts(facts, last));
     });
 
-    // Start in the saved look
-    let theme = theme_from(&Saved::load(&data_dir().join("faucet.json")).theme);
+    // Start in the saved look, at the saved mint
+    let path = data_dir().join("faucet.json");
+    let saved = Saved::load(&path);
+    let theme = theme_from(&saved.theme);
     app.global::<Faucet>().set_theme(theme);
 
     // Paint both themes' backgrounds off the UI thread, the one on screen first, so the
@@ -751,7 +1007,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().worker_threads(2).build()?;
 
     let state = app.global::<Faucet>();
-    state.set_mint_host(SharedString::from(MINT_URL.trim_start_matches("https://").split('/').next().unwrap_or(MINT_URL)));
+    state.set_mint_host(SharedString::from(MintUrl::from_str(&saved.mint).map(|m| mints::host(&m)).unwrap_or_else(|_| saved.mint.clone())));
     state.set_drip(DEFAULT_DRIP as i32);
     let send = move |cmd: Cmd| {
         let _ = commands.send(cmd);
@@ -768,6 +1024,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     state.on_request_refill(move |amount| send_refill(Cmd::Refill(amount.max(1) as u64)));
     let send_close = send.clone();
     state.on_close_refill(move || send_close(Cmd::CloseRefill));
+    let send_list = send.clone();
+    state.on_open_mints(move || send_list(Cmd::ListMints));
+    let send_switch = send.clone();
+    state.on_switch_mint(move |url, leave_sats| send_switch(Cmd::SwitchMint { url: url.to_string(), leave_sats }));
     state.on_reclaim(move || send(Cmd::Reclaim));
     state.on_exit_app(|| {
         let _ = slint::quit_event_loop();
@@ -793,12 +1053,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     rt.spawn(async move {
-        match open_wallet().await {
-            Ok(wallet) => {
-                let path = data_dir().join("faucet.json");
-                let saved = Saved::load(&path);
+        match open_wallet(&saved.mint).await {
+            Ok((wallet, localstore, seed)) => {
                 let dispenser = Dispenser {
                     wallet,
+                    localstore,
+                    seed,
                     saved,
                     path,
                     screen,
@@ -807,6 +1067,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     claimed_at: None,
                     resting: false,
                     failures: 0,
+                    arriving: None,
                 };
                 dispenser.run(receiver).await;
             }
@@ -892,6 +1153,14 @@ mod tests {
         assert!((33..=35).contains(&run(&mut (0..392).map(|x| (x, 0)))));
         assert!((33..=35).contains(&run(&mut (0..392).rev().map(|x| (x, 0)))));
         assert!((33..=35).contains(&run(&mut (0..392).rev().map(|y| (0, y)))));
+    }
+
+    #[test]
+    fn sats_get_thousands_separators() {
+        assert_eq!(sats(0), "0");
+        assert_eq!(sats(999), "999");
+        assert_eq!(sats(4221), "4,221");
+        assert_eq!(sats(1234567), "1,234,567");
     }
 
     #[test]

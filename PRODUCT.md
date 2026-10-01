@@ -42,19 +42,21 @@ A phone wallet is one app among many. Cashu NERV is a single-purpose object that
 
 **Software:** Rust, Slint 1.15 (linuxkms backend, software renderer; no GPU rendering), CDK 0.15 wallet with a local SQLite store and a locally generated seed. The window is fixed at 720×720 with no frame. RAM is the hard ceiling: a browser-based frontend was tried and reverted for RAM reasons. Every animation costs CPU under software rendering.
 
-**Mint (binding):** a single hardcoded mint, Minibits (`https://mint.minibits.cash/Bitcoin`), is the intended model, not a stopgap before multi-mint.
+**Mint:** one home mint, Minibits (`https://mint.minibits.cash/Bitcoin`) by default. The owner can pick another home mint under Settings from a short list (`shared/known-mints.txt`: Minibits, Macadamia, antifiat.cash) plus any listed in `~/.local/share/cashu-pixel/mints.txt`. Ecash from other mints stays at its own mint.
 
 **Current capabilities, from `ui/app.slint` and `src/main.rs`:**
 
 - Home: sat balance, mint host, and SEND, RECEIVE, SETTINGS.
 - Receive: preset amounts (21, 100, 500, 1K, 5K, 10K sat). One tap creates both a Lightning invoice and a NUT-18 Cashu payment request for the same amount. The QR screen toggles between them (LIGHTNING | CASHU), both are watched at once, and the first payment completes the screen.
   - Lightning is polled every 2 seconds and minted automatically.
-  - Cashu requests accept Minibits ecash only (strict mint list) and are delivered over Nostr (NIP-17 gift wrap) through relay.damus.io and nos.lol, using a fresh key per request.
+  - Cashu requests accept ecash from the home mint only (strict mint list) and are delivered over Nostr (NIP-17 gift wrap) through relay.damus.io and nos.lol, using a fresh key per request.
   - Ecash sent to a request after the app closed or the request expired is not received. The payer's wallet keeps it as a pending send it can reclaim.
 - Send: preset amounts (10, 21, 50, 100, 500, 1K sat) produce an ecash token QR. Tokens over 320 characters are shown as an animated QR (NUT-16, via CDK), with 100-byte frames at 5 per second. The receiving wallet must support NUT-16 animated QRs (cashu.me does).
-- Settings: read-only balance, mint URL, and version string.
+- Settings: read-only balance and version string, and the home mint, whose CHANGE key opens the Home Mint screen.
+- HOME MINT (Settings): lists the offered mints and any mint the wallet holds ecash from, with the sats held at each. Tapping one checks it (it must answer and handle sat over Lightning) and makes it the home mint. Nothing moves between mints.
 - RECLAIM TOKENS (Settings): checks every token this wallet has sent, takes back the ones nobody has claimed, and reports how many sats came back and how many tokens were already claimed.
 - EXIT TO DESKTOP (Settings): closes the app and returns to the Pi's home screen.
+- RESET DEVICE (Settings): erases the seed and the wallet database and starts a new, empty wallet on a new seed. A confirm screen shows the sats that would be destroyed, and the erase only runs after HOLD TO ERASE has been held for 3 seconds. With no seed backup, ecash still on the device is lost for good.
 - BLE receive: UI only. The screen says "SCANNING FOR BLUETOOTH" but nothing scans yet.
 
 **Not implemented:** receiving an ecash token (no scan or paste path), custom amounts, restore or backup of the seed.

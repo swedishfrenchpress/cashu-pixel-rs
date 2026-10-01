@@ -9,10 +9,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-use slint::platform::{Platform, WindowAdapter};
+use slint::platform::{Platform, PointerEventButton, WindowAdapter, WindowEvent};
 use slint::{ComponentHandle, Rgb8Pixel, SharedString};
 
-use crate::{BlePhase, MainApp, WalletState};
+use crate::{BlePhase, MainApp, MintChoice, WalletState};
 
 /// A platform whose clock only moves when a snapshot says so, so animations can be settled
 /// or caught halfway
@@ -135,5 +135,53 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
     s.set_other_mints(2);
     s.set_current_screen(5);
     shoot("13-settings-mints", settled)?;
+
+    // Home mint: the offered mints, then the others this wallet holds ecash from
+    let choice = |host: &str, sats: i32, home: bool| MintChoice {
+        host: SharedString::from(host),
+        url: SharedString::from(format!("https://{}", host)),
+        sats,
+        home,
+    };
+    s.set_mints(slint::ModelRc::new(slint::VecModel::from(vec![
+        choice("mint.minibits.cash", 934, true),
+        choice("mint.macadamia.cash", 0, false),
+        choice("antifiat.cash", 0, false),
+        choice("mint.coinos.io", 200, false),
+        choice("8333.space", 100, false),
+    ])));
+    s.set_current_screen(8);
+    shoot("13b-home-mint", settled)?;
+    s.set_mint_busy(true);
+    s.set_status(SharedString::from("CHECKING ANTIFIAT.CASH..."));
+    shoot("13c-home-mint-checking", settled)?;
+    s.set_mint_busy(false);
+    s.set_status(SharedString::from("HOME MINT NOW ANTIFIAT.CASH"));
+    shoot("13d-home-mint-switched", settled)?;
+    s.set_status(SharedString::default());
+
+    s.set_current_screen(7);
+    shoot("14-reset", settled)?;
+    // A finger on HOLD TO ERASE: let go early, then halfway through a second press, then past
+    // its end, which goes Home
+    let tick = Duration::from_millis(50);
+    let hold = |ticks: u32| {
+        for _ in 0..ticks {
+            clock.set(clock.get() + tick);
+            slint::platform::update_timers_and_animations();
+        }
+    };
+    let finger = slint::LogicalPosition::new(532.0, 608.0);
+    window.dispatch_event(WindowEvent::PointerPressed { position: finger, button: PointerEventButton::Left });
+    hold(20);
+    window.dispatch_event(WindowEvent::PointerReleased { position: finger, button: PointerEventButton::Left });
+    hold(2);
+    shoot("14a-reset-let-go", Duration::ZERO)?;
+    window.dispatch_event(WindowEvent::PointerPressed { position: finger, button: PointerEventButton::Left });
+    hold(30);
+    shoot("14b-reset-holding", Duration::ZERO)?;
+    hold(40);
+    window.dispatch_event(WindowEvent::PointerReleased { position: finger, button: PointerEventButton::Left });
+    shoot("14c-reset-erasing", Duration::ZERO)?;
     Ok(())
 }

@@ -4,13 +4,13 @@ A Cashu ecash faucet for the Raspberry Pi Zero 2 W and the HyperPixel 4.0 Square
 
 The screen always shows one token QR, 21 sats by default. When someone scans and claims it with a Cashu wallet, the faucet shows a short "claimed" moment. It then pauses (1 minute by default), so one person can't empty it. The countdown runs in the headline while the card cycles through Cashu and ecash trivia, and then the next token appears. When the balance runs below one drip, the screen shows a Lightning invoice that anyone can pay to refill it.
 
-- **Own wallet:** it keeps its seed, `wallet.db` and `faucet.json` (drip size, stats, the token on screen) in `~/.local/share/pixel-faucet`. It never touches Cashu NERV's wallet.
-- **Mint:** Minibits, the same one Cashu NERV uses.
+- **Own wallet:** it keeps its seed, `wallet.db` and `faucet.json` (drip size, mint, stats, the token on screen) in `~/.local/share/pixel-faucet`. It never touches Cashu NERV's wallet.
+- **Mint:** Minibits until the owner picks another under Settings › Mint. The list is `shared/known-mints.txt` plus any in `~/.local/share/pixel-faucet/mints.txt`, and it shows the sats the faucet holds at each. Switching checks the new mint (it must mint and pay sat over Lightning), takes back the token on screen, and moves every sat over Lightning: the new mint issues an invoice and the old one pays it, less the Lightning fee. Change from the fee reserve stays at the old mint. If the payment fails, the faucet stays on the old mint, and the owner can switch anyway and leave the sats there; switching back later finds them again.
 - **Restarts:** the token on screen is saved, so after a restart the faucet shows the same token again instead of leaving it outstanding. Tokens that were created but never shown are taken back at startup.
 - **Small tokens:** tokens drop their DLEQ proofs. The proofs let a wallet verify a token offline, but they nearly double its length, and a phone claiming the token is online anyway. The faucet encodes tokens itself and leaves the `d` key out. CDK would write it as `null`, and Macadamia (CashuSwift) rejects the whole token when it does.
 - **Animated QR by default:** tokens over 300 characters are shown as animated QRs (NUT-16), about 49×49 modules per frame at 5 frames a second. The frames are built from the faucet's own encoding, not by CDK's encoder, which would put the `null` back. The owner panel can switch to one static QR, for wallets without NUT-16.
 - **Exact-size QRs:** QR codes are rendered in Rust at their exact on-screen size and drawn 1:1. Slint's software renderer drops the last rows and columns when it scales an image by a non-integer factor.
-- **Settings:** the gear at the top right. From there you can set the sats per drip, the time between drips (off, 30 s, 1 min or 5 min), animated or static QR, and the theme; refill with Lightning; take back unclaimed tokens; or exit to the desktop.
+- **Settings:** the gear at the top right. From there you can set the sats per drip, the time between drips (off, 30 s, 1 min or 5 min), animated or static QR, the theme and the mint; refill with Lightning; take back unclaimed tokens; or exit to the desktop.
 
 ## Themes
 

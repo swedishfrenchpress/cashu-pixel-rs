@@ -12,7 +12,7 @@ use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferTyp
 use slint::platform::{Platform, WindowAdapter};
 use slint::{ComponentHandle, Rgb8Pixel, SharedString};
 
-use crate::{backdrop, qr_image, Faucet, FaucetApp, Frames, Layout, Phase, Theme};
+use crate::{backdrop, qr_image, Faucet, FaucetApp, Frames, Layout, MintOption, MintStep, Phase, Theme};
 
 /// A platform whose clock only moves when a snapshot says so, so animations can be settled
 struct SnapshotPlatform {
@@ -91,6 +91,19 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
     f.set_refill_qr(slint::Image::from_rgba8(invoice));
     f.set_refill_qr_small(slint::Image::from_rgba8(invoice_small));
     f.set_refill_amount(1000);
+    let option = |host: &str, sats: i32, current: bool| MintOption {
+        host: SharedString::from(host),
+        url: SharedString::from(format!("https://{}", host)),
+        sats,
+        current,
+    };
+    f.set_mints(slint::ModelRc::new(slint::VecModel::from(vec![
+        option("mint.minibits.cash", 4200, true),
+        option("mint.macadamia.cash", 0, false),
+        option("antifiat.cash", 0, false),
+        option("mint.coinos.io", 37, false),
+    ])));
+    f.set_mint_movable(4221);
 
     let shoot = |name: &str| -> Result<(), Box<dyn Error>> {
         clock.set(clock.get() + Duration::from_secs(3));
@@ -150,9 +163,34 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
         shoot(&format!("{}-8-owner-refill", prefix))?;
         f.set_refill_received(5000);
         shoot(&format!("{}-9-owner-refilled", prefix))?;
-        f.set_owner_open(false);
         f.set_refill_view(false);
         f.set_refill_received(0);
+
+        f.set_mint_view(true);
+        f.set_mint_step(MintStep::List);
+        shoot(&format!("{}-9a-mint-list", prefix))?;
+        f.set_mint_pick(option("antifiat.cash", 0, false));
+        f.set_mint_step(MintStep::Confirm);
+        shoot(&format!("{}-9b-mint-confirm", prefix))?;
+        f.set_mint_movable(0);
+        shoot(&format!("{}-9c-mint-confirm-empty", prefix))?;
+        f.set_mint_movable(4221);
+        f.set_mint_note(SharedString::from("Moving 4,221 sats to antifiat.cash…"));
+        f.set_mint_step(MintStep::Moving);
+        shoot(&format!("{}-9d-mint-moving", prefix))?;
+        f.set_mint_note(SharedString::from("4,198 sats moved to antifiat.cash, 23 in fees."));
+        f.set_mint_step(MintStep::Done);
+        shoot(&format!("{}-9e-mint-done", prefix))?;
+        f.set_mint_note(SharedString::from(
+            "Couldn't move the sats: Lightning payment failed. Still on mint.minibits.cash. Switching anyway leaves 4,221 sats there.",
+        ));
+        f.set_mint_can_force(true);
+        f.set_mint_step(MintStep::Failed);
+        shoot(&format!("{}-9f-mint-failed", prefix))?;
+        f.set_mint_can_force(false);
+        f.set_mint_step(MintStep::List);
+        f.set_mint_view(false);
+        f.set_owner_open(false);
         f.set_message(SharedString::from("The wallet didn't open: database is locked"));
         f.set_phase(Phase::Error);
         shoot(&format!("{}-10-error", prefix))?;

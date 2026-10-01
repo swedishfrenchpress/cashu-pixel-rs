@@ -7,6 +7,7 @@ colors:
   unit-01-purple: "#B266FF"
   lightning-amber: "#FFAA00"
   pattern-blue: "#00F6FF"
+  emergency-red: "#FF3040"
   void-black: "#000000"
   console-black: "#0A0A0A"
   standby-gray: "#555555"
@@ -149,6 +150,7 @@ A black field under saturated signal colours, with each colour bound to one mean
 - **Unit-01 Purple** (#B266FF): the SEND channel. Its home key, header bar, keypad, CREATE TOKEN QR, and the token QR header. Paired with Phosphor Green on Home, it echoes Evangelion Unit-01. It is a flat, luminous violet (6.2:1 on black), never a purple-to-blue gradient.
 - **Lightning Amber** (#FFAA00): Lightning. The LIGHTNING toggle key and the "RECEIVE // LIGHTNING" QR header.
 - **Pattern Blue** (#00F6FF): Bluetooth, and only Bluetooth. The scan banner in its active state.
+- **Emergency Red** (#FF3040): erasing the wallet, and only that (5.7:1 on black). The RESET DEVICE key in Settings, and the Reset screen's header bar, warning panel, HOLD TO ERASE key, and status accent. It is not a general error colour: failures stay in the screen's own channel colour.
 
 ### Neutral
 - **Void Black** (#000000): the field. Every screen background, key fill, and panel fill.
@@ -157,7 +159,7 @@ A black field under saturated signal colours, with each colour bound to one mean
 - **Standby Text** (#838383): inactive and secondary text at 5.2:1. The idle "SYSTEM READY", placeholders, disabled labels, header subtitles, the SETTINGS header action, and DONE.
 
 ### Named Rules
-**The Channel Rule.** Every function owns exactly one colour, and nothing else wears it: SEND is purple, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.
+**The Channel Rule.** Every function owns exactly one colour, and nothing else wears it: SEND is purple, RECEIVE and value are green, Lightning is amber, Bluetooth is blue, erasing the wallet is red, and the system is orange. A screen takes its channel's colour in its header bar, its keypad, and its primary action.
 
 **The Green Means Sats Rule.** Phosphor Green is reserved for sat amounts, receiving, and success. An amount is green even on the purple Send screen.
 
@@ -205,7 +207,9 @@ The controls stretch to fill whatever the fixed parts leave, so no screen ends i
 - **Home:** a 236px balance readout, then SEND and RECEIVE as two equal keys, each 328px wide, filling the rest (about 33 × 30 mm). Settings lives in the header, as a 176px action on the right.
 - **Receive and Send:** a 112px amount readout, then a 3×2 keypad of 216px-wide keys that stretch vertically (114px on Receive, 148px on Send), then a 112px full-width action. Receive adds the 52px Bluetooth banner at the bottom.
 - **QR:** a 456px framed code, centred, with a 40px status line under it, then a full-width 100px DONE. There is no manual payment check: a paid invoice turns into the success panel on its own.
-- **Settings:** three info rows that share the height at 1.5 : 1 : 1, then two 112px actions side by side: RECLAIM TOKENS (Phosphor Green) and EXIT TO DESKTOP (NERV Orange), both 24px labels with a Meta hint.
+- **Settings:** three info rows that share the height at 1.5 : 1 : 1, then two 112px actions side by side: RECLAIM TOKENS (Phosphor Green) and EXIT TO DESKTOP (NERV Orange), both 24px labels with a Meta hint. At the bottom is a full-width 80px RESET DEVICE (Emergency Red), which only opens the Reset screen.
+- **Home Mint:** a one-line caption in Standby Text, then a list of 80px Mint Keys that scrolls when it overflows, then a second caption at the bottom. The MINT row in Settings opens it: that row is a key, with CHANGE on the right behind a divider, like the header action.
+- **Reset:** a warning panel that fills the height, then CANCEL (Standby Text) and HOLD TO ERASE (Emergency Red) side by side at 112px. The panel names what goes: the balance at Display size in Phosphor Green, under a red caption, with the seed and the missing backup spelled out below it.
 
 Touch targets are 80px (8mm) or larger everywhere; the smallest is the 104 × 72px header back key.
 
@@ -250,6 +254,16 @@ Character: **alarm-panel channels on a quiet instrument frame.** Channel control
 - **Pressed:** 20% tint, a 2px full-strength frame, a solid channel bar, and an inner frame at 35%.
 - **Disabled:** a Void Black fill, a Standby Gray frame at 60%, and a Standby Text label. It still accepts a tap, so it can explain itself in the status bar ("SELECT AN AMOUNT FIRST").
 - **Standby variant:** Standby Text as the channel colour, for secondary actions (DONE).
+
+### Hold Key
+- The Action Button's shape and rest state, for the one action that can't be undone (HOLD TO ERASE).
+- It ignores taps. While a finger is on it, a 25% tint fills the key from the left over 3 seconds, and the action fires when the fill reaches the far edge.
+- Letting go early empties the fill, and the status bar says nothing was erased.
+
+### Mint Key
+- An 80px-tall, full-width NERV Orange key: the host at 24px on the left, then the sats held there in Phosphor Green when there are any.
+- The home mint has a 2px frame, a 10% orange fill and a HOME tag (Void Black text on an orange plate). Tapping it changes nothing.
+- While a picked mint is being checked, the other keys dim to a 30% frame and Standby Text, and ignore taps.
 
 ### Amount Key
 - **Shape:** 216px wide, at least 96px tall (it stretches to fill the keypad), square, with 12 × 2px bracket corners.

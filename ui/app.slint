@@ -11,6 +11,7 @@ global Nerv {
     out property <color> purple: #B266FF; // Unit-01 Purple: the SEND channel
     out property <color> amber: #FFAA00;
     out property <color> blue: #00F6FF;
+    out property <color> red: #FF3040; // Emergency Red: erasing the wallet, and nothing else
     out property <color> void: #000000;
     out property <color> console: #0A0A0A;
     out property <color> standby: #555555;
@@ -153,6 +154,76 @@ component NervButton inherits Rectangle {
     }
 
     touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+// ─── HOLD KEY (fires only after one full, unbroken press) ───
+component HoldKey inherits Rectangle {
+    in property <string> label;
+    in property <string> hint: "";
+    in property <color> accent: Nerv.red;
+    in property <duration> hold: 3s;
+    in property <length> label-size: 24px;
+    callback held();
+    // Let go before the press was full
+    callback released-early();
+
+    // How far the press has got, 0 to 1
+    property <float> progress: 0;
+    property <bool> down: touch.pressed;
+
+    height: 104px;
+    background: accent.with-alpha(0.05);
+    border-width: down ? 2px : 1px;
+    border-color: down ? accent : accent.with-alpha(0.75);
+
+    // The press filling up, left to right
+    Rectangle { x: 0; y: 0; width: parent.width * root.progress; height: parent.height; background: accent.with-alpha(0.25); }
+    // Left channel bar
+    Rectangle { x: 0; y: 0; width: 6px; height: parent.height; background: accent.with-alpha(down ? 1.0 : 0.45); }
+    // Built glow while pressed
+    if down: Rectangle {
+        x: 5px; y: 5px;
+        width: parent.width - 10px; height: parent.height - 10px;
+        border-width: 1px;
+        border-color: accent.with-alpha(0.35);
+    }
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        padding-left: 18px;
+        padding-right: 12px;
+        Text {
+            text: label;
+            font-size: label-size;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: accent;
+            horizontal-alignment: center;
+        }
+        if hint != "": Text {
+            text: hint;
+            font-size: 18px;
+            color: accent;
+            horizontal-alignment: center;
+        }
+    }
+
+    touch := TouchArea { }
+
+    Timer {
+        interval: 50ms;
+        running: touch.pressed || root.progress > 0;
+        triggered => {
+            if !touch.pressed {
+                if root.progress < 1 { root.released-early(); }
+                root.progress = 0;
+            } else if root.progress < 1 {
+                root.progress = Math.min(1, root.progress + 50ms / root.hold);
+                if root.progress >= 1 { root.held(); }
+            }
+        }
+    }
 }
 
 // ─── CHANNEL KEY (Home's SEND / RECEIVE) ───
@@ -503,19 +574,91 @@ component InfoRow inherits Rectangle {
     in property <string> value;
     in property <length> value-size: 28px;
     in property <color> value-color: Nerv.orange;
-    background: Nerv.void;
-    border-width: 1px;
-    border-color: Nerv.orange.with-alpha(0.3);
+    // When set, the row is a key: this label sits on the right and a tap calls `clicked`
+    in property <string> action: "";
+    callback clicked();
 
-    Rectangle { x: 0; y: 0; width: 6px; height: parent.height; background: Nerv.orange.with-alpha(0.45); }
-    VerticalLayout {
+    property <bool> down: touch.pressed && action != "";
+    background: down ? Nerv.orange.with-alpha(0.2) : Nerv.void;
+    border-width: down ? 2px : 1px;
+    border-color: down ? Nerv.orange : Nerv.orange.with-alpha(action != "" ? 0.6 : 0.3);
+
+    Rectangle { x: 0; y: 0; width: 6px; height: parent.height; background: Nerv.orange.with-alpha(down ? 1.0 : 0.45); }
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: action != "" ? 0 : 16px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 8px;
+            horizontal-stretch: 1;
+            Text { text: caption; font-size: 18px; font-weight: 700; letter-spacing: 2px; color: Nerv.orange; }
+            Text { text: value; font-size: value-size; font-weight: 700; color: value-color; overflow: elide; }
+        }
+        if action != "": Rectangle {
+            width: 152px;
+            Rectangle { x: 0; y: 14px; width: 1px; height: parent.height - 28px; background: Nerv.orange.with-alpha(0.4); }
+            Text {
+                text: action;
+                font-size: 20px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                color: Nerv.orange;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    touch := TouchArea { enabled: root.action != ""; clicked => { root.clicked(); } }
+}
+
+// ─── MINT KEY (Home mint: one mint to choose) ───
+component MintKey inherits Rectangle {
+    in property <string> host;
+    // Sats this wallet holds at the mint
+    in property <int> sats;
+    in property <bool> home;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    property <bool> down: touch.pressed && enabled && !home;
+    height: 80px;
+    background: down ? Nerv.orange.with-alpha(0.2) : home ? Nerv.orange.with-alpha(0.1) : Nerv.void;
+    border-width: down || home ? 2px : 1px;
+    border-color: down || home ? Nerv.orange : Nerv.orange.with-alpha(enabled ? 0.6 : 0.3);
+
+    Rectangle { x: 0; y: 0; width: 6px; height: parent.height; background: Nerv.orange.with-alpha(home || down ? 1.0 : 0.45); }
+    HorizontalLayout {
         padding-left: 24px;
         padding-right: 16px;
-        alignment: center;
-        spacing: 8px;
-        Text { text: caption; font-size: 18px; font-weight: 700; letter-spacing: 2px; color: Nerv.orange; }
-        Text { text: value; font-size: value-size; font-weight: 700; color: value-color; overflow: elide; }
+        spacing: 16px;
+        Text {
+            text: host;
+            font-size: 24px;
+            font-weight: 700;
+            color: enabled || home ? Nerv.orange : Nerv.standby-text;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+        if sats > 0: Text {
+            text: sats + " SAT";
+            font-size: 22px;
+            font-weight: 700;
+            color: Nerv.green;
+            vertical-alignment: center;
+        }
+        // The home mint's tag: void text on an orange plate
+        if home: Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 88px;
+            height: 36px;
+            background: Nerv.orange;
+            Text { text: "HOME"; font-size: 18px; font-weight: 700; letter-spacing: 2px; color: Nerv.void; horizontal-alignment: center; vertical-alignment: center; }
+        }
     }
+
+    touch := TouchArea { clicked => { root.clicked(); } }
 }
 
 // ─── SCANLINE OVERLAY (CRT EFFECT) ───
@@ -547,6 +690,15 @@ export enum BlePhase {
     offline,
 }
 
+// A mint to choose as the home mint
+export struct MintChoice {
+    host: string,
+    url: string,
+    // Sats this wallet holds there
+    sats: int,
+    home: bool,
+}
+
 export global WalletState {
     in-out property <string> balance: "0";
     in-out property <string> mint-url: "CONNECTING...";
@@ -565,7 +717,11 @@ export global WalletState {
     in-out property <image> request-image;
     in-out property <int> received-amount: 0;
     in-out property <int> current-screen: 0;
-    // 0=home, 1=receive, 2=send, 4=qr, 5=settings, 6=receive over Bluetooth
+    // 0=home, 1=receive, 2=send, 4=qr, 5=settings, 6=receive over Bluetooth, 7=reset, 8=home mint
+
+    // Home mint: the mints to choose from, and whether a picked one is being checked
+    in-out property <[MintChoice]> mints;
+    in-out property <bool> mint-busy;
 
     // Receive over Bluetooth
     in-out property <BlePhase> ble-phase;
@@ -593,6 +749,9 @@ export global WalletState {
     callback discard-bluetooth();
     callback exit-app();
     callback reclaim-tokens();
+    callback reset-device();
+    callback load-mints();
+    callback set-home-mint(string);
 }
 
 // ─── MAIN ───
@@ -1404,15 +1563,21 @@ export component MainApp inherits Window {
             padding: Nerv.margin;
             spacing: 16px;
 
-            InfoRow { min-height: 128px; vertical-stretch: 1.5; caption: "BALANCE"; value: WalletState.balance + " SAT"; value-size: 64px; value-color: Nerv.green; }
+            InfoRow { min-height: 120px; vertical-stretch: 1.5; caption: "BALANCE"; value: WalletState.balance + " SAT"; value-size: 64px; value-color: Nerv.green; }
             InfoRow {
-                min-height: 96px;
+                min-height: 88px;
                 vertical-stretch: 1;
-                caption: WalletState.other-mints > 0 ? "MINTS" : "MINT";
-                value: WalletState.mint-url + (WalletState.other-mints > 0 ? " + " + WalletState.other-mints + " MORE" : "");
+                caption: WalletState.other-mints > 0 ? "HOME MINT + " + WalletState.other-mints + " MORE" : "HOME MINT";
+                value: WalletState.mint-url;
                 value-size: 28px;
+                action: "CHANGE";
+                clicked => {
+                    WalletState.current-screen = 8;
+                    WalletState.status = "";
+                    WalletState.load-mints();
+                }
             }
-            InfoRow { min-height: 88px; vertical-stretch: 1; caption: "SYSTEM"; value: "CASHU NERV V0.3.0 // CDK 0.18 // SLINT"; value-size: 20px; value-color: Nerv.standby-text; }
+            InfoRow { min-height: 80px; vertical-stretch: 1; caption: "SYSTEM"; value: "CASHU NERV V0.3.0 // CDK 0.18 // SLINT"; value-size: 20px; value-color: Nerv.standby-text; }
 
             HorizontalLayout {
                 spacing: 16px;
@@ -1437,6 +1602,172 @@ export component MainApp inherits Window {
                     accent: Nerv.orange;
                     clicked => { WalletState.exit-app(); }
                 }
+            }
+
+            // Opens the confirm screen; nothing is erased from here
+            NervButton {
+                height: 80px;
+                label: "RESET DEVICE";
+                hint: "ERASE THIS WALLET";
+                label-size: 24px;
+                accent: Nerv.red;
+                clicked => { WalletState.current-screen = 7; WalletState.status = ""; }
+            }
+        }
+
+        NervStatusBar { status: WalletState.status; }
+    }
+
+    // ═══ RESET (confirm, then erase the wallet) ═══
+    if WalletState.current-screen == 7: VerticalLayout {
+        spacing: 0;
+
+        NervHeader {
+            title: "RESET // ERASE DEVICE";
+            subtitle: "SYS";
+            accent: Nerv.red;
+            show-back: true;
+            back => { WalletState.current-screen = 5; WalletState.status = ""; }
+        }
+
+        VerticalLayout {
+            padding: Nerv.margin;
+            spacing: 16px;
+
+            // What goes: the sats, and the seed they hang on
+            Rectangle {
+                vertical-stretch: 1;
+                background: Nerv.void;
+                border-width: 1px;
+                border-color: Nerv.red.with-alpha(0.45);
+                Brackets { x: 0; y: 0; width: parent.width; height: parent.height; tint: Nerv.red; arm: 20px; weight: 3px; }
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 10px;
+
+                    Text {
+                        text: "ERASING THIS WALLET DESTROYS";
+                        font-size: 20px;
+                        font-weight: 700;
+                        letter-spacing: 4px;
+                        color: Nerv.red;
+                        horizontal-alignment: center;
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 18px;
+                        Text {
+                            text: WalletState.balance;
+                            font-size: root.balance-size;
+                            font-weight: 700;
+                            color: Nerv.green;
+                            vertical-alignment: bottom;
+                        }
+                        // Baseline-align the unit: DejaVu descent is 0.236em
+                        VerticalLayout {
+                            alignment: end;
+                            padding-bottom: (root.balance-size - 40px) * 0.236;
+                            Text { text: "SAT"; font-size: 40px; font-weight: 700; color: Nerv.green; }
+                        }
+                    }
+                    Text {
+                        text: "THE SEED AND ALL ECASH ARE DELETED";
+                        font-size: 24px;
+                        font-weight: 700;
+                        color: Nerv.red;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "NO BACKUP EXISTS // THIS CAN'T BE UNDONE";
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: Nerv.standby-text;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 16px;
+                NervButton {
+                    width: Nerv.half-w;
+                    height: 112px;
+                    label: "CANCEL";
+                    hint: "KEEP THIS WALLET";
+                    label-size: 24px;
+                    accent: Nerv.standby-text;
+                    clicked => { WalletState.current-screen = 5; WalletState.status = ""; }
+                }
+                HoldKey {
+                    width: Nerv.half-w;
+                    height: 112px;
+                    label: "HOLD TO ERASE";
+                    hint: "3 SECONDS";
+                    released-early => { WalletState.status = "NOTHING ERASED // HOLD FOR 3 SECONDS"; }
+                    held => {
+                        WalletState.current-screen = 0;
+                        WalletState.status = "ERASING WALLET...";
+                        WalletState.reset-device();
+                    }
+                }
+            }
+        }
+
+        NervStatusBar { status: WalletState.status; accent: Nerv.red; }
+    }
+
+    // ═══ HOME MINT (where Lightning and payment requests receive) ═══
+    if WalletState.current-screen == 8: VerticalLayout {
+        spacing: 0;
+
+        NervHeader {
+            title: "HOME MINT // SELECT";
+            subtitle: "SYS";
+            show-back: true;
+            back => { WalletState.current-screen = 5; WalletState.status = ""; }
+        }
+
+        VerticalLayout {
+            padding: Nerv.margin;
+            spacing: 12px;
+
+            Text {
+                text: "LIGHTNING AND PAYMENT REQUESTS RECEIVE HERE";
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                color: Nerv.standby-text;
+            }
+            Flickable {
+                vertical-stretch: 1;
+                viewport-height: list.preferred-height;
+                list := VerticalLayout {
+                    alignment: start;
+                    spacing: 8px;
+                    for mint in WalletState.mints: MintKey {
+                        host: mint.host;
+                        sats: mint.sats;
+                        home: mint.home;
+                        enabled: !WalletState.mint-busy;
+                        clicked => {
+                            if mint.home {
+                                WalletState.status = "ALREADY THE HOME MINT";
+                            } else if !WalletState.mint-busy {
+                                WalletState.mint-busy = true;
+                                WalletState.status = "CHECKING " + mint.host.to-uppercase() + "...";
+                                WalletState.set-home-mint(mint.url);
+                            }
+                        }
+                    }
+                }
+            }
+            Text {
+                text: "ECASH YOU HOLD STAYS AT ITS OWN MINT";
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                color: Nerv.standby-text;
             }
         }
 

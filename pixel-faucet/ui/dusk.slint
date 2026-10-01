@@ -5,7 +5,7 @@
 // renderer can't draw those soft effects live, so this file draws text, QR codes and solid
 // shapes on top.
 
-import { Faucet, Phase, Theme } from "state.slint";
+import { Faucet, Phase, Theme, MintStep } from "state.slint";
 import { Layout, Fmt, Trivia, Qr, Gear, Settings } from "common.slint";
 
 // Geometry shared with the Dusk backdrop painter (read from Rust)
@@ -397,7 +397,7 @@ component CloseButton inherits Rectangle {
 component SettingRow inherits Rectangle {
     in property <string> title;
     in property <string> note;
-    height: 88px;
+    height: 76px;
     Rectangle {
         x: 0;
         y: 0;
@@ -406,21 +406,21 @@ component SettingRow inherits Rectangle {
     }
     Line {
         x: 0;
-        y: 16px;
+        y: 10px;
         text: root.title;
         font-weight: 600;
         color: Ui.text;
     }
     Line {
         x: 0;
-        y: 46px;
+        y: 40px;
         text: root.note;
         font-size: 18px;
         color: Ui.ghost;
     }
     HorizontalLayout {
         x: 196px;
-        y: 12px;
+        y: 6px;
         width: root.width - 196px;
         height: 64px;
         spacing: 8px;
@@ -428,7 +428,199 @@ component SettingRow inherits Rectangle {
     }
 }
 
-// Settings: drip size, pause, QR style, theme, refills, taking tokens back, exit
+// One mint in the mint list: its host, the sats held there, and a tag on the one in use
+component MintRow inherits Rectangle {
+    in property <string> host;
+    in property <int> sats;
+    in property <bool> current;
+    callback clicked;
+    height: 76px;
+    border-radius: self.height / 2;
+    background: root.current ? Ui.fill : ta.pressed ? Ui.fill-press : transparent;
+    border-width: 1px;
+    border-color: root.current ? Ui.brand-light : Ui.hairline;
+    HorizontalLayout {
+        padding-left: 32px;
+        padding-right: 14px;
+        spacing: 16px;
+        Line {
+            text: root.host;
+            font-size: 24px;
+            font-weight: 600;
+            color: Ui.text;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+        if root.sats > 0: Line {
+            text: "\{Fmt.sats(root.sats)} \{Fmt.unit(root.sats)}";
+            color: Ui.dim;
+            vertical-alignment: center;
+        }
+        if root.current: Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 104px;
+            height: 48px;
+            border-radius: self.height / 2;
+            background: Ui.brand;
+            Line {
+                text: "In use";
+                font-weight: 600;
+                color: #ffffff;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Settings › Mint: pick a mint, confirm, watch the sats move, see how it went
+component MintPanel inherits Rectangle {
+    property <length> inner: self.width - 80px;
+
+    // The mints
+    if Faucet.mint-step == MintStep.list: Rectangle {
+        Line {
+            x: 40px;
+            y: 104px;
+            width: root.inner;
+            text: "Tokens and refills come from this mint.";
+        }
+        Flickable {
+            x: 40px;
+            y: 152px;
+            width: root.inner;
+            height: 432px;
+            viewport-height: list.preferred-height;
+            list := VerticalLayout {
+                alignment: start;
+                spacing: 12px;
+                for mint in Faucet.mints: MintRow {
+                    host: mint.host;
+                    sats: mint.sats;
+                    current: mint.current;
+                    clicked => {
+                        if !mint.current {
+                            Faucet.mint-pick = mint;
+                            Faucet.mint-step = MintStep.confirm;
+                        }
+                    }
+                }
+            }
+        }
+        Pill {
+            x: 40px;
+            y: 602px;
+            width: root.inner;
+            text: "Back to settings";
+            clicked => { Settings.close-mints(); }
+        }
+    }
+
+    // Switch, and move the sats along?
+    if Faucet.mint-step == MintStep.confirm: Rectangle {
+        VerticalLayout {
+            x: 40px;
+            y: 136px;
+            width: root.inner;
+            height: 440px;
+            alignment: start;
+            spacing: 24px;
+            Display {
+                text: Faucet.mint-movable > 0 ? "Move \{Fmt.sats(Faucet.mint-movable)} \{Fmt.unit(Faucet.mint-movable)} to \{Faucet.mint-pick.host}?"
+                    : "Switch to \{Faucet.mint-pick.host}?";
+                wrap: word-wrap;
+            }
+            Line {
+                text: Faucet.mint-movable > 0
+                    ? "The faucet pays \{Faucet.mint-pick.host} over Lightning from \{Faucet.mint-host}, and the next token comes from there. A few sats go to Lightning fees."
+                    : "The faucet holds no sats right now, so nothing moves. The next token comes from \{Faucet.mint-pick.host} once it's refilled.";
+                wrap: word-wrap;
+            }
+        }
+        HorizontalLayout {
+            x: 40px;
+            y: 602px;
+            width: root.inner;
+            height: 76px;
+            spacing: 16px;
+            Pill {
+                horizontal-stretch: 1;
+                text: "Cancel";
+                clicked => { Faucet.mint-step = MintStep.list; }
+            }
+            Pill {
+                horizontal-stretch: 1;
+                selected: true;
+                text: Faucet.mint-movable > 0 ? "Move and switch" : "Switch";
+                clicked => {
+                    Faucet.mint-step = MintStep.moving;
+                    Faucet.switch-mint(Faucet.mint-pick.url, false);
+                }
+            }
+        }
+    }
+
+    // Under way, then done or not
+    if Faucet.mint-step == MintStep.moving || Faucet.mint-step == MintStep.done || Faucet.mint-step == MintStep.failed: Rectangle {
+        VerticalLayout {
+            x: 40px;
+            y: 120px;
+            width: root.inner;
+            height: 460px;
+            alignment: center;
+            spacing: 20px;
+            if Faucet.mint-step == MintStep.done: HorizontalLayout {
+                alignment: center;
+                CheckDisc { }
+            }
+            Display {
+                text: Faucet.mint-step == MintStep.moving ? "Switching…"
+                    : Faucet.mint-step == MintStep.done ? "Switched" : "Didn't switch";
+                horizontal-alignment: center;
+            }
+            Line {
+                text: Faucet.mint-note;
+                color: Ui.text;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+        if Faucet.mint-step == MintStep.done: Pill {
+            x: (parent.width - self.width) / 2;
+            y: 602px;
+            width: 280px;
+            light: true;
+            text: "Done";
+            clicked => { Settings.close-mints(); }
+        }
+        if Faucet.mint-step == MintStep.failed: HorizontalLayout {
+            x: 40px;
+            y: 602px;
+            width: root.inner;
+            height: 76px;
+            spacing: 16px;
+            Pill {
+                horizontal-stretch: 1;
+                text: Faucet.mint-can-force ? "Stay" : "Back";
+                clicked => { Faucet.mint-step = MintStep.list; }
+            }
+            if Faucet.mint-can-force: Pill {
+                horizontal-stretch: 1;
+                text: "Switch anyway";
+                clicked => {
+                    Faucet.mint-step = MintStep.moving;
+                    Faucet.switch-mint(Faucet.mint-pick.url, true);
+                }
+            }
+        }
+    }
+}
+
+// Settings: drip size, pause, QR style, theme, mint, refills, taking tokens back, exit
 component OwnerSheet inherits Rectangle {
     width: Layout.screen;
     height: Layout.screen - DuskLayout.sheet-y;
@@ -444,7 +636,7 @@ component OwnerSheet inherits Rectangle {
     Display {
         x: 40px;
         y: 34px;
-        text: Faucet.refill-view ? "Refill" : "Settings";
+        text: Faucet.refill-view ? "Refill" : Faucet.mint-view ? "Mint" : "Settings";
         font-size: 40px;
         color: Ui.strong;
     }
@@ -454,11 +646,12 @@ component OwnerSheet inherits Rectangle {
         clicked => { Settings.close(); }
     }
 
-    if !Faucet.refill-view: VerticalLayout {
+    property <bool> main: !Faucet.refill-view && !Faucet.mint-view;
+    if root.main: VerticalLayout {
         x: 40px;
-        y: 108px;
+        y: 100px;
         width: parent.width - 80px;
-        height: 5 * 88px;
+        height: 6 * 76px;
         SettingRow {
             title: "Sats per drip";
             note: "Per claim";
@@ -529,6 +722,17 @@ component OwnerSheet inherits Rectangle {
             }
         }
         SettingRow {
+            title: "Mint";
+            note: "Where sats live";
+            Pill {
+                horizontal-stretch: 1;
+                height: 64px;
+                font-size: 24px;
+                text: "\{Faucet.mint-host}  ›";
+                clicked => { Settings.open-mints(); }
+            }
+        }
+        SettingRow {
             title: "Refill";
             note: "Sats, via Lightning";
             for amount in [1000, 5000, 21000]: Pill {
@@ -543,33 +747,37 @@ component OwnerSheet inherits Rectangle {
             }
         }
     }
-    if !Faucet.refill-view: Line {
+    if root.main: Line {
         x: 40px;
-        y: 562px;
+        y: 568px;
         width: parent.width - 80px;
         text: Faucet.message != "" ? Faucet.message
             : "\{Fmt.sats(Faucet.balance)} \{Fmt.unit(Faucet.balance)} in the faucet · \{Fmt.sats(Faucet.sats-given)} given away";
         color: Faucet.message != "" ? Ui.brand-lightest : Ui.dim;
         overflow: elide;
     }
-    if !Faucet.refill-view: HorizontalLayout {
+    if root.main: HorizontalLayout {
         x: 40px;
-        y: 602px;
+        y: 606px;
         width: parent.width - 80px;
-        height: 76px;
+        height: 72px;
         spacing: 16px;
         Pill {
             horizontal-stretch: 1;
+            height: 72px;
             text: "Take back unclaimed";
             clicked => { Faucet.reclaim(); }
         }
         Pill {
             horizontal-stretch: 1;
+            height: 72px;
             light: true;
             text: "Exit to desktop";
             clicked => { Faucet.exit-app(); }
         }
     }
+
+    if Faucet.mint-view: MintPanel { }
 
     if Faucet.refill-view: refill := Rectangle {
         property <bool> paid: Faucet.refill-received > 0;
