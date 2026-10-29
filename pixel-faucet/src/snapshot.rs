@@ -61,11 +61,12 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
         .map_err(|e| format!("{:?}", e))?;
 
     let app = FaucetApp::new()?;
+    crate::keep_korean_facts(&app.global::<crate::Trivia>());
     let size = 720u32;
     window.set_size(slint::PhysicalSize::new(size, size));
     let started = std::time::Instant::now();
     backdrop::dusk::paint(&backdrop::dusk::Geometry::of(&app)).install(&app.global::<Faucet>());
-    backdrop::berlin::paint(&backdrop::berlin::Geometry::of(&app)).install(&app.global::<Faucet>());
+    backdrop::seoul::paint(&backdrop::seoul::Geometry::of(&app)).install(&app.global::<Faucet>());
     println!("backdrops painted in {:?}", started.elapsed());
     app.show()?;
 
@@ -118,7 +119,7 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
         Ok(())
     };
 
-    for (theme, prefix) in [(Theme::Dusk, "dusk"), (Theme::Berlin, "berlin")] {
+    for (theme, prefix) in [(Theme::Dusk, "dusk"), (Theme::Seoul, "seoul")] {
         f.set_theme(theme);
         app.global::<crate::Trivia>().set_ticks(0);
         f.set_message(SharedString::default());
@@ -143,9 +144,14 @@ pub fn run(dir: &Path) -> Result<(), Box<dyn Error>> {
         f.set_cooldown_left(42);
         f.set_phase(Phase::Cooling);
         shoot(&format!("{}-4b-cooling", prefix))?;
-        // The longest fact, to check it fits the card
-        app.global::<crate::Trivia>().set_ticks(64);
+        // The longest fact, to check it fits the card, and in Seoul its Korean too
+        let trivia = app.global::<crate::Trivia>();
+        trivia.set_ticks(2 * trivia.get_period());
         shoot(&format!("{}-4c-cooling-fact-2", prefix))?;
+        if theme == Theme::Seoul {
+            trivia.set_ticks(2 * trivia.get_period() + 32);
+            shoot(&format!("{}-4d-cooling-fact-2-korean", prefix))?;
+        }
         f.set_balance(12);
         f.set_phase(Phase::Empty);
         f.set_refill_ready(true);

@@ -31,16 +31,16 @@ The seed and `wallet.db` live in `~/.local/share/cashu-pixel`.
 |:-:|:-:|:-:|
 | <img src="docs/screenshots/faucet-dusk-claim.png" width="260" alt="Dusk theme: Scan to claim 21 sats, with a token QR"> | <img src="docs/screenshots/faucet-dusk-pause.png" width="260" alt="Dusk theme: Next drip in 0:42, with a Cashu fact"> | <img src="docs/screenshots/faucet-dusk-refill.png" width="260" alt="Dusk theme: The faucet is dry, with a Lightning invoice QR"> |
 | **bitcoin++ theme** | **bitcoin++ pause** | **Settings** |
-| <img src="docs/screenshots/faucet-bitcoinpp-claim.png" width="260" alt="bitcoin++ Berlin theme: Scan. Get 21 sats."> | <img src="docs/screenshots/faucet-bitcoinpp-pause.png" width="260" alt="bitcoin++ Berlin theme: Next drip in 00m 42s"> | <img src="docs/screenshots/faucet-settings.png" width="260" alt="Settings: sats per drip, pause, QR code, theme, mint, refill"> |
+| <img src="docs/screenshots/faucet-bitcoinpp-claim.png" width="260" alt="bitcoin++ Seoul theme: Scan. Get 21 sats., with the same line in Korean"> | <img src="docs/screenshots/faucet-bitcoinpp-pause.png" width="260" alt="bitcoin++ Seoul theme: Next drip in 00m 42s, with a Cashu fact"> | <img src="docs/screenshots/faucet-settings.png" width="260" alt="Settings: sats per drip, pause, QR code, theme, mint, refill"> |
 
 The screen always shows one token, 21 sats by default. After someone claims it, the faucet pauses (1 minute by default) so one person can't empty it. The countdown runs in the headline while the card shows Cashu trivia, and then the next token appears. When the faucet runs dry, it shows a Lightning invoice that anyone can pay to refill it.
 
 - **Own wallet:** kept in `~/.local/share/pixel-faucet`, apart from Cashu NERV's.
 - **Mint:** Minibits until you pick another under Settings › Mint, from the [mint list](#mint-list). The faucet checks the new mint, then moves its sats there over Lightning (the old mint pays an invoice from the new one, less the Lightning fee). If the payment fails, the faucet stays put, and you can switch anyway and leave the sats behind.
-- **Two themes:** **Dusk**, the faucet's own look inspired by umbrelOS, and **bitcoin++ Berlin**, styled after [btcpp.dev/berlin26](https://btcpp.dev/berlin26). Pick one under Settings.
+- **Two themes:** **Dusk**, the faucet's own look inspired by umbrelOS, and **bitcoin++ Seoul**, the privacy edition, styled after [btcpp.dev/seoul](https://btcpp.dev/seoul) in English and Korean. Pick one under Settings.
 - **Settings:** the gear at the top right. It sets the sats per drip, the pause, an animated or static QR code, the theme and the mint. It can also refill over Lightning, take back unclaimed tokens, or exit to the desktop.
 
-More detail is in [pixel-faucet/README.md](pixel-faucet/README.md). The bitcoin++ name, wordmark and market artwork belong to bitcoin++.
+More detail is in [pixel-faucet/README.md](pixel-faucet/README.md). The bitcoin++ name, wordmark and persimmon-tree artwork belong to bitcoin++.
 
 ## Mint list
 

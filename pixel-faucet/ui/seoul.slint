@@ -1,16 +1,21 @@
-// bitcoin++ Berlin, payments edition. The look follows btcpp.dev: paper #F6F3EE and ink
+// bitcoin++ Seoul, privacy edition. The look follows btcpp.dev: paper #F6F3EE and ink
 // #1C1C1E with one apricot accent used as flat slabs, square corners and ink rules (2px
 // here: 1px is only 0.1mm), hard offset shadows, IBM Plex Mono for uppercase labels and
 // buttons, IBM Plex Sans Bold for statements, Source Serif 4 italic for asides (and one
 // italic word inside a bold headline), and the bitcoin++ wordmark in Ubuntu Bold Italic.
-// The market art, shaded for legibility, is painted by src/backdrop/berlin.rs; everything
+// What the public sees is in English and Korean at once: the Korean line takes the italic
+// aside's place under the headline, Korean captions sit under the mono ones, and trivia
+// shows each fact in English and then in Korean. Korean is set in IBM Plex Sans KR, upright
+// (Hangul has no italic), using the site's own Korean wording where it has some. Settings
+// is for the owner and stays English.
+// The persimmon-tree art, shaded dark, is painted by src/backdrop/seoul.rs; everything
 // else is flat and drawn here.
 
 import { Faucet, Phase, Theme, MintStep } from "state.slint";
 import { Layout, Fmt, Trivia, Qr, Gear, Settings } from "common.slint";
 
-// Geometry shared with the Berlin backdrop painter (read from Rust)
-export global BerlinLayout {
+// Geometry shared with the Seoul backdrop painter (read from Rust)
+export global SeoulLayout {
     out property <length> gutter: 40px;
     // The black ticker bar along the top
     out property <length> ticker-h: 48px;
@@ -20,8 +25,8 @@ export global BerlinLayout {
     out property <length> card-size: 432px;
     // Clear space around the QR inside the card's 2px frame (the card is its quiet zone)
     out property <length> card-inset: 20px;
-    // The stats band along the bottom
-    out property <length> band-y: 614px;
+    // The stats band along the bottom (it holds a Korean caption under each English one)
+    out property <length> band-y: 610px;
     out property <length> rule: 2px;
 }
 
@@ -66,6 +71,14 @@ component Aside inherits Text {
     color: Btc.on-dark-soft;
 }
 
+// Korean, in IBM Plex Sans KR (Plex Mono and Source Serif have no Hangul)
+component Korean inherits Text {
+    font-family: "IBM Plex Sans KR";
+    font-weight: 500;
+    font-size: 15px;
+    color: Btc.ink;
+}
+
 // The bitcoin++ wordmark: Ubuntu Bold Italic, the second "+" pulled 0.16em left so the
 // two plus bars fuse into one
 component Wordmark inherits Rectangle {
@@ -108,7 +121,7 @@ component Check inherits Rectangle {
     width: 112px;
     height: 112px;
     background: Btc.accent;
-    border-width: BerlinLayout.rule;
+    border-width: SeoulLayout.rule;
     border-color: Btc.ink;
     Path {
         width: 100%;
@@ -133,7 +146,7 @@ component Button inherits Rectangle {
     callback clicked;
     height: 64px;
     background: ta.pressed ? Btc.ink : root.selected ? Btc.accent : root.dark ? Btc.ink : Btc.paper;
-    border-width: BerlinLayout.rule;
+    border-width: SeoulLayout.rule;
     border-color: Btc.ink;
     if !root.wordmark: Label {
         text: root.text;
@@ -153,33 +166,42 @@ component Button inherits Rectangle {
     }
 }
 
-// One cell of the stats band: a big number over a mono caption, like the site's glance stats
+// One cell of the stats band: a big number over a mono caption and its Korean, like the
+// site's glance stats
 component Stat inherits Rectangle {
     in property <int> value;
     in property <string> caption;
+    in property <string> caption-ko;
     Text {
         x: 26px;
-        y: 14px;
+        y: 4px;
         text: Fmt.sats(root.value);
         font-family: "IBM Plex Sans";
         font-weight: 700;
-        font-size: 46px;
+        font-size: 44px;
         color: Btc.ink;
     }
     Label {
         x: 26px;
-        y: 72px;
+        y: 60px;
         text: root.caption;
         font-size: 15px;
         font-weight: 500;
         letter-spacing: 1.5px;
         color: Btc.muted;
     }
+    Korean {
+        x: 26px;
+        y: 80px;
+        text: root.caption-ko;
+        font-size: 16px;
+        color: Btc.muted;
+    }
 }
 
 // The black ticker along the top: the wordmark in its own cell, then mono caps
 component Ticker inherits Rectangle {
-    height: BerlinLayout.ticker-h;
+    height: SeoulLayout.ticker-h;
     background: Btc.chrome;
     HorizontalLayout {
         alignment: start;
@@ -191,14 +213,14 @@ component Ticker inherits Rectangle {
             }
         }
         Rectangle {
-            width: BerlinLayout.rule;
+            width: SeoulLayout.rule;
             background: #F6F3EE38;
         }
         HorizontalLayout {
             padding-left: 20px;
             spacing: 16px;
             Label {
-                text: "BERLIN, PAYMENTS EDITION";
+                text: "SEOUL, PRIVACY EDITION";
                 font-size: 16px;
                 font-weight: 700;
                 letter-spacing: 2px;
@@ -212,7 +234,7 @@ component Ticker inherits Rectangle {
                 vertical-alignment: center;
             }
             Label {
-                text: "OCT 1 - 3, 2026";
+                text: "NOV 5 - 6, 2026";
                 font-size: 16px;
                 font-weight: 500;
                 letter-spacing: 2px;
@@ -224,12 +246,12 @@ component Ticker inherits Rectangle {
             horizontal-stretch: 1;
         }
         Rectangle {
-            width: BerlinLayout.rule;
+            width: SeoulLayout.rule;
             background: #F6F3EE38;
         }
         // Settings gear
         Rectangle {
-            width: BerlinLayout.ticker-h;
+            width: SeoulLayout.ticker-h;
             background: gear.pressed || Faucet.owner-open ? #24211E : transparent;
             Gear {
                 width: 24px;
@@ -254,7 +276,7 @@ component Desk inherits Rectangle {
     // Headline: bold, ending in either the amount in accent ("Don't just talk. Build." on
     // the site) or one standalone italic serif word ("Important dates.")
     HorizontalLayout {
-        x: BerlinLayout.gutter;
+        x: SeoulLayout.gutter;
         y: 62px;
         height: 62px;
         spacing: 14px;
@@ -295,38 +317,45 @@ component Desk inherits Rectangle {
             }
         }
     }
-    // Deck, or a status message
+    // The headline in Korean, in the aside's place, or a status message (in English: they
+    // come from the wallet)
     HorizontalLayout {
-        x: BerlinLayout.gutter;
+        x: SeoulLayout.gutter;
         y: 122px;
         height: 34px;
         alignment: start;
-        Aside {
-            text: Faucet.message != "" ? Faucet.message
-                : root.dripping ? "Free ecash. Open any Cashu wallet and scan"
-                : root.claimed ? (Faucet.cooldown > 0 ? "Enjoy your sats. The next drip is in \{Fmt.clock(Faucet.cooldown)}" : "Enjoy your sats. The next one is on its way")
-                : root.cooling ? "A short pause between claims keeps sats for everyone"
-                : root.refilled ? "Dripping again in a moment"
-                : "Pay the Lightning invoice to add \{Fmt.sats(Faucet.refill-amount)} sats";
-            color: Faucet.message != "" ? Btc.accent : Btc.on-dark-soft;
+        if Faucet.message != "": Aside {
+            text: Faucet.message;
+            color: Btc.accent;
+        }
+        if Faucet.message == "": Korean {
+            property <string> amount: "\{Fmt.sats(Faucet.token-amount)} \{Fmt.unit(Faucet.token-amount)}";
+            text: root.dripping ? "Cashu 지갑으로 스캔하고 \{self.amount} 받아 가세요"
+                : root.claimed ? (Faucet.cooldown > 0 ? "\{self.amount} 받으셨어요! 다음 지급까지 \{Fmt.clock(Faucet.cooldown)}" : "\{self.amount} 받으셨어요! 다음 토큰이 곧 나와요")
+                : root.cooling ? "모두가 받을 수 있도록 잠시 쉬어 갑니다"
+                : root.refilled ? "충전해 주셔서 감사합니다! 곧 다시 시작해요"
+                : "파우셋이 비었어요. 라이트닝으로 \{Fmt.sats(Faucet.refill-amount)} sats 충전해 주세요";
+            font-size: 25px;
+            color: Btc.on-dark-soft;
+            vertical-alignment: center;
         }
     }
 
     // The card's hard shadow, then the card: paper in a 2px ink frame, accent in the pause
     Rectangle {
-        x: BerlinLayout.card-x + 8px;
-        y: BerlinLayout.card-y + 8px;
-        width: BerlinLayout.card-size;
-        height: BerlinLayout.card-size;
+        x: SeoulLayout.card-x + 8px;
+        y: SeoulLayout.card-y + 8px;
+        width: SeoulLayout.card-size;
+        height: SeoulLayout.card-size;
         background: Btc.chrome;
     }
     Rectangle {
-        x: BerlinLayout.card-x;
-        y: BerlinLayout.card-y;
-        width: BerlinLayout.card-size;
-        height: BerlinLayout.card-size;
+        x: SeoulLayout.card-x;
+        y: SeoulLayout.card-y;
+        width: SeoulLayout.card-size;
+        height: SeoulLayout.card-size;
         background: root.cooling ? Btc.accent : Btc.paper;
-        border-width: BerlinLayout.rule;
+        border-width: SeoulLayout.rule;
         border-color: Btc.ink;
 
         Qr {
@@ -339,31 +368,62 @@ component Desk inherits Rectangle {
             opacity: root.dry && Faucet.refill-ready && !root.refilled ? 1 : 0;
             animate opacity { duration: 300ms; easing: ease-out; }
         }
-        if root.dry && !Faucet.refill-ready && !root.refilled: Label {
-            text: "CREATING INVOICE…";
-            horizontal-alignment: center;
-            vertical-alignment: center;
+        if root.dry && !Faucet.refill-ready && !root.refilled: VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            Label {
+                text: "CREATING INVOICE…";
+                horizontal-alignment: center;
+            }
+            Korean {
+                text: "인보이스 만드는 중…";
+                font-size: 17px;
+                horizontal-alignment: center;
+            }
         }
-        // Trivia while the pause runs, on an accent slab like the site's planning board
+        // Trivia while the pause runs, on an accent slab like the site's planning board:
+        // each fact in English, then in Korean
         Rectangle {
             opacity: root.cooling ? 1 : 0;
             animate opacity { duration: 300ms; easing: ease-out; }
-            Label {
+            HorizontalLayout {
                 x: 36px;
                 y: 36px;
-                text: "§\{Fmt.pad2(Trivia.index + 1)} · DID YOU KNOW?";
-                color: #090909;
+                height: 28px;
+                spacing: 10px;
+                alignment: start;
+                Label {
+                    text: "§\{Fmt.pad2(Trivia.index + 1)} ·";
+                    color: #090909;
+                    vertical-alignment: center;
+                }
+                if !Trivia.korean: Label {
+                    text: "DID YOU KNOW?";
+                    color: #090909;
+                    vertical-alignment: center;
+                    opacity: Trivia.fading ? 0 : 1;
+                    animate opacity { duration: 250ms; easing: ease-in-out; }
+                }
+                if Trivia.korean: Korean {
+                    text: "알고 계셨나요?";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #090909;
+                    vertical-alignment: center;
+                    opacity: Trivia.fading ? 0 : 1;
+                    animate opacity { duration: 250ms; easing: ease-in-out; }
+                }
             }
             Text {
                 x: 36px;
                 y: 82px;
                 width: parent.width - 72px;
                 height: parent.height - 118px;
-                text: Trivia.facts[Trivia.index];
-                font-family: "IBM Plex Sans";
+                text: Trivia.korean ? Trivia.facts-ko[Trivia.index] : Trivia.facts[Trivia.index];
+                font-family: Trivia.korean ? "IBM Plex Sans KR" : "IBM Plex Sans";
                 font-weight: 700;
-                font-size: 31px;
-                letter-spacing: -0.4px;
+                font-size: Trivia.korean ? 28px : 31px;
+                letter-spacing: Trivia.korean ? -0.6px : -0.4px;
                 color: #090909;
                 wrap: word-wrap;
                 vertical-alignment: top;
@@ -394,33 +454,41 @@ component Desk inherits Rectangle {
                 color: Btc.muted;
                 horizontal-alignment: center;
             }
+            Korean {
+                y: 350px;
+                text: root.claimed ? "수령 완료" : "충전 완료 · 감사합니다";
+                font-size: 18px;
+                color: Btc.muted;
+                horizontal-alignment: center;
+            }
         }
     }
 
     // Stats band: three cells split by ink rules, the site's glance grid
     Rectangle {
-        y: BerlinLayout.band-y;
-        height: Layout.screen - BerlinLayout.band-y;
+        y: SeoulLayout.band-y;
+        height: Layout.screen - SeoulLayout.band-y;
         background: Btc.paper;
         Rectangle {
             y: 0;
-            height: BerlinLayout.rule;
+            height: SeoulLayout.rule;
             background: Btc.ink;
         }
         for cell[i] in [
-            { value: Faucet.sats-given, caption: "SATS GIVEN AWAY" },
-            { value: Faucet.drips-given, caption: Faucet.drips-given == 1 ? "CLAIM" : "CLAIMS" },
-            { value: Faucet.balance, caption: "SATS IN THE FAUCET" },
+            { value: Faucet.sats-given, caption: "SATS GIVEN AWAY", caption-ko: "나눠 준 sats" },
+            { value: Faucet.drips-given, caption: Faucet.drips-given == 1 ? "CLAIM" : "CLAIMS", caption-ko: "수령 횟수" },
+            { value: Faucet.balance, caption: "SATS IN THE FAUCET", caption-ko: "파우셋 잔액" },
         ]: Stat {
             x: i * Layout.screen / 3;
-            y: BerlinLayout.rule;
+            y: SeoulLayout.rule;
             width: Layout.screen / 3;
-            height: parent.height - BerlinLayout.rule;
+            height: parent.height - SeoulLayout.rule;
             value: cell.value;
             caption: cell.caption;
+            caption-ko: cell.caption-ko;
             Rectangle {
                 x: 0;
-                width: i > 0 ? BerlinLayout.rule : 0;
+                width: i > 0 ? SeoulLayout.rule : 0;
                 height: parent.height;
                 background: Btc.ink;
             }
@@ -443,18 +511,37 @@ component Cover inherits Rectangle {
                 sparkles: true;
             }
         }
-        Label {
-            text: "BERLIN, PAYMENTS EDITION · CASHU FAUCET";
-            font-size: 16px;
-            font-weight: 700;
-            color: Btc.accent;
-            horizontal-alignment: center;
+        VerticalLayout {
+            spacing: 4px;
+            Label {
+                text: "SEOUL, PRIVACY EDITION · CASHU FAUCET";
+                font-size: 16px;
+                font-weight: 700;
+                color: Btc.accent;
+                horizontal-alignment: center;
+            }
+            Korean {
+                text: "서울, 프라이버시 에디션 · Cashu 파우셋";
+                font-size: 18px;
+                font-weight: 600;
+                color: Btc.accent;
+                horizontal-alignment: center;
+            }
         }
-        Aside {
-            text: root.failed ? "The faucet couldn't start. \{Faucet.message}" : "Opening the wallet…";
-            font-size: 28px;
-            horizontal-alignment: center;
-            wrap: word-wrap;
+        VerticalLayout {
+            spacing: 6px;
+            Aside {
+                text: root.failed ? "The faucet couldn't start. \{Faucet.message}" : "Opening the wallet…";
+                font-size: 28px;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+            Korean {
+                text: root.failed ? "파우셋을 시작하지 못했어요" : "지갑을 여는 중…";
+                font-size: 22px;
+                color: Btc.on-dark-soft;
+                horizontal-alignment: center;
+            }
         }
         if !root.failed: HorizontalLayout {
             alignment: center;
@@ -462,13 +549,13 @@ component Cover inherits Rectangle {
             Rectangle {
                 width: 240px;
                 height: 10px;
-                border-width: BerlinLayout.rule;
+                border-width: SeoulLayout.rule;
                 border-color: Btc.paper;
                 Rectangle {
-                    x: BerlinLayout.rule + (parent.width - self.width - 2 * BerlinLayout.rule) * (0.5 + 0.5 * Math.sin(animation-tick() / 1s * 180deg));
-                    y: BerlinLayout.rule;
+                    x: SeoulLayout.rule + (parent.width - self.width - 2 * SeoulLayout.rule) * (0.5 + 0.5 * Math.sin(animation-tick() / 1s * 180deg));
+                    y: SeoulLayout.rule;
                     width: 60px;
-                    height: parent.height - 2 * BerlinLayout.rule;
+                    height: parent.height - 2 * SeoulLayout.rule;
                     background: Btc.accent;
                 }
             }
@@ -492,7 +579,7 @@ component SettingRow inherits Rectangle {
     Rectangle {
         x: 0;
         y: 0;
-        height: BerlinLayout.rule;
+        height: SeoulLayout.rule;
         background: Btc.ink;
     }
     Label {
@@ -526,14 +613,14 @@ component MintRow inherits Rectangle {
     callback clicked;
     height: 72px;
     background: ta.pressed && !root.current ? Btc.warm : Btc.paper;
-    border-width: BerlinLayout.rule;
+    border-width: SeoulLayout.rule;
     border-color: Btc.ink;
     // The one in use carries the accent bar, inside the frame
     if root.current: Rectangle {
-        x: BerlinLayout.rule;
-        y: BerlinLayout.rule;
+        x: SeoulLayout.rule;
+        y: SeoulLayout.rule;
         width: 12px;
-        height: parent.height - 2 * BerlinLayout.rule;
+        height: parent.height - 2 * SeoulLayout.rule;
         background: Btc.accent;
     }
     HorizontalLayout {
@@ -731,7 +818,7 @@ component MintPanel inherits Rectangle {
 // Settings: drip size, pause, QR style, theme, mint, refills, taking tokens back, exit
 component OwnerSheet inherits Rectangle {
     width: Layout.screen;
-    height: Layout.screen - BerlinLayout.ticker-h;
+    height: Layout.screen - SeoulLayout.ticker-h;
     background: Btc.paper;
     // Keep taps on the panel from reaching what's behind it
     TouchArea { }
@@ -819,8 +906,8 @@ component OwnerSheet inherits Rectangle {
             Button {
                 horizontal-stretch: 1;
                 wordmark: true;
-                selected: Faucet.theme == Theme.berlin;
-                clicked => { Faucet.theme = Theme.berlin; Faucet.set-theme(Theme.berlin); }
+                selected: Faucet.theme == Theme.seoul;
+                clicked => { Faucet.theme = Theme.seoul; Faucet.set-theme(Theme.seoul); }
             }
         }
         SettingRow {
@@ -851,7 +938,7 @@ component OwnerSheet inherits Rectangle {
         x: 32px;
         y: 88px + 6 * 76px;
         width: parent.width - 64px;
-        height: BerlinLayout.rule;
+        height: SeoulLayout.rule;
         background: Btc.ink;
     }
     if root.main: Aside {
@@ -902,7 +989,7 @@ component OwnerSheet inherits Rectangle {
             width: 336px;
             height: 336px;
             background: Btc.paper;
-            border-width: BerlinLayout.rule;
+            border-width: SeoulLayout.rule;
             border-color: Btc.ink;
             Qr {
                 source: Faucet.refill-qr-small;
@@ -959,17 +1046,17 @@ component OwnerSheet inherits Rectangle {
     }
 }
 
-export component BerlinScreen inherits Rectangle {
+export component SeoulScreen inherits Rectangle {
     property <bool> awake: Faucet.phase != Phase.starting && Faucet.phase != Phase.error;
 
     Image {
-        source: Faucet.berlin-backdrop;
+        source: Faucet.seoul-backdrop;
         width: parent.width;
         height: parent.height;
     }
     // Blurred until the wallet is open, then it pulls into focus
     Image {
-        source: Faucet.berlin-soft;
+        source: Faucet.seoul-soft;
         width: parent.width;
         height: parent.height;
         opacity: root.awake ? 0 : 1;
@@ -988,7 +1075,7 @@ export component BerlinScreen inherits Rectangle {
         }
     }
     OwnerSheet {
-        y: Faucet.owner-open ? BerlinLayout.ticker-h : Layout.screen;
+        y: Faucet.owner-open ? SeoulLayout.ticker-h : Layout.screen;
         animate y { duration: 260ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
     }
 

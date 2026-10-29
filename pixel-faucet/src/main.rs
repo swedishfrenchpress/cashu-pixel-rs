@@ -275,7 +275,7 @@ struct Saved {
     cooldown: u64,
     /// Show longer tokens as animated QR codes (NUT-16) rather than one dense static code
     animated: bool,
-    /// The look: "dusk" or "berlin"
+    /// The look: "dusk" or "seoul"
     theme: String,
     /// The mint tokens and refills come from
     mint: String,
@@ -287,13 +287,14 @@ struct Saved {
 
 fn theme_name(theme: Theme) -> &'static str {
     match theme {
-        Theme::Berlin => "berlin",
+        Theme::Seoul => "seoul",
         _ => "dusk",
     }
 }
 
+/// "berlin" is the bitcoin++ theme Seoul replaced, so a faucet left on it stays on bitcoin++
 fn theme_from(name: &str) -> Theme {
-    if name == "berlin" { Theme::Berlin } else { Theme::Dusk }
+    if name == "seoul" || name == "berlin" { Theme::Seoul } else { Theme::Dusk }
 }
 
 /// Every trivia index once, in a random order. A new round never opens with `last`, the
@@ -306,6 +307,29 @@ fn shuffled_facts(count: usize, last: Option<i32>) -> slint::ModelRc<i32> {
         order.swap(0, 1);
     }
     slint::ModelRc::new(slint::VecModel::from(order))
+}
+
+/// Text layout breaks Korean between any two syllables, so a word can split across lines.
+/// Joining each word's characters with U+2060 WORD JOINER (zero width) leaves breaks at the
+/// spaces only, like the Seoul site's `word-break: keep-all`.
+fn keep_korean_words(text: &str) -> String {
+    let hangul = |c: char| ('\u{AC00}'..='\u{D7A3}').contains(&c);
+    let mut out = String::with_capacity(text.len() * 2);
+    let mut prev = ' ';
+    for c in text.chars() {
+        if !prev.is_whitespace() && !c.is_whitespace() && (hangul(prev) || hangul(c)) {
+            out.push('\u{2060}');
+        }
+        out.push(c);
+        prev = c;
+    }
+    out
+}
+
+/// The Korean trivia, joined word by word (see `keep_korean_words`)
+fn keep_korean_facts(trivia: &Trivia) {
+    let facts: Vec<SharedString> = trivia.get_facts_ko().iter().map(|f| keep_korean_words(&f).into()).collect();
+    trivia.set_facts_ko(slint::ModelRc::new(slint::VecModel::from(facts)));
 }
 
 impl Default for Saved {
@@ -961,6 +985,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Trivia in a random order, reshuffled after each round
     let trivia = app.global::<Trivia>();
+    keep_korean_facts(&trivia);
     let facts = trivia.get_facts().row_count();
     trivia.set_order(shuffled_facts(facts, None));
     let weak = app.as_weak();
@@ -979,7 +1004,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Paint both themes' backgrounds off the UI thread, the one on screen first, so the
     // other is ready by the time anyone switches; the start screen shows until then
-    let (dusk, berlin) = (backdrop::dusk::Geometry::of(&app), backdrop::berlin::Geometry::of(&app));
+    let (dusk, seoul) = (backdrop::dusk::Geometry::of(&app), backdrop::seoul::Geometry::of(&app));
     let painter = screen.clone();
     std::thread::spawn(move || {
         let paint_dusk = || {
@@ -988,18 +1013,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("dusk backdrops painted in {:?}", started.elapsed());
             painter.update(move |f| backdrops.install(f));
         };
-        let paint_berlin = || {
+        let paint_seoul = || {
             let started = std::time::Instant::now();
-            let backdrops = backdrop::berlin::paint(&berlin);
-            println!("berlin backdrops painted in {:?}", started.elapsed());
+            let backdrops = backdrop::seoul::paint(&seoul);
+            println!("seoul backdrops painted in {:?}", started.elapsed());
             painter.update(move |f| backdrops.install(f));
         };
-        if theme == Theme::Berlin {
-            paint_berlin();
+        if theme == Theme::Seoul {
+            paint_seoul();
             paint_dusk();
         } else {
             paint_dusk();
-            paint_berlin();
+            paint_seoul();
         }
     });
     let (commands, receiver) = mpsc::unbounded_channel();
@@ -1091,6 +1116,13 @@ mod tests {
     use cdk::mint_url::MintUrl;
     use cdk::nuts::{Id, Proof, SecretKey};
     use cdk::secret::Secret;
+
+    #[test]
+    fn korean_words_hold_together_and_break_at_spaces() {
+        let joined = keep_korean_words("1995년부터 Cashu 토큰(NUT-11)을 써요.");
+        assert_eq!(joined.replace('\u{2060}', ""), "1995년부터 Cashu 토큰(NUT-11)을 써요.");
+        assert_eq!(joined, "1995\u{2060}년\u{2060}부\u{2060}터 Cashu 토\u{2060}큰\u{2060}(NUT-11)\u{2060}을 써\u{2060}요\u{2060}.");
+    }
 
     #[test]
     fn token_without_dleq_omits_the_key_and_round_trips() {

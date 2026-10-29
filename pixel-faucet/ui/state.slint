@@ -18,8 +18,8 @@ export enum Phase {
 export enum Theme {
     // The faucet's own look, inspired by umbrelOS
     dusk,
-    // Styled after btcpp.dev/berlin26
-    berlin,
+    // bitcoin++ Seoul, privacy edition: styled after btcpp.dev/seoul
+    seoul,
 }
 
 // A mint the faucet can move to, in Settings › Mint
@@ -57,8 +57,8 @@ export global Faucet {
     in property <image> dusk-backdrop;
     in property <image> dusk-soft;
     in property <image> dusk-sheet;
-    in property <image> berlin-backdrop;
-    in property <image> berlin-soft;
+    in property <image> seoul-backdrop;
+    in property <image> seoul-soft;
 
     // The token on screen, as a QR (one frame of it when animated)
     in property <image> token-qr;

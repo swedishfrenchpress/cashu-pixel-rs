@@ -22,7 +22,7 @@ The faucet has two looks. Switch between them under **Settings**, the gear at th
 
 It borrows design values and ideas only. No Umbrel code, wallpapers, icons or other assets are used, because Umbrel is PolyForm Noncommercial and its assets are unlicensed. The wallpaper is procedural: a sun setting behind the QR card over long-exposure water.
 
-**bitcoin++ Berlin** is styled after [btcpp.dev/berlin26](https://btcpp.dev/berlin26):
+**bitcoin++ Seoul**, the privacy edition, is styled after [btcpp.dev/seoul](https://btcpp.dev/seoul) and speaks English and Korean at once:
 - **Colours:** paper `#F6F3EE` and ink `#1C1C1E`, with one apricot accent `#F9AF5E` used as flat slabs
 - **Shapes:** square corners, 2 px ink rules in a ledger-style grid, and hard offset shadows
 - **Type:**
@@ -30,21 +30,23 @@ It borrows design values and ideas only. No Umbrel code, wallpapers, icons or ot
   - IBM Plex Sans Bold for statements
   - Source Serif 4 italic for asides and the one italic word in each headline ("Scan. Get *paid.*")
   - Ubuntu Bold Italic for the `bitcoin++` wordmark
-- **Art:** the event's market illustration as the hero
+  - IBM Plex Sans KR for the Korean, upright, since Hangul has no italic
+- **Korean:** a Korean line sits under each headline, in place of the English aside. Each stat has a Korean caption under its English one, and the trivia shows each fact in English for 8 s, then in Korean. Wording comes from the site's Korean page ([btcpp.dev/ko/seoul](https://btcpp.dev/ko/seoul)) where it has some. Settings is for the owner and stays English.
+- **Art:** the event's persimmon-tree illustration as the hero, shaded dark for the edition's "bitcoin++ goes dark"
 
 In both themes the card turns into Cashu trivia during the pause between claims. The countdown stays in the headline.
 
 **How the themes are built:**
 - **Rendering limits:** Slint's software renderer can't draw blur, shadows or gradients on rounded shapes. So `src/backdrop/` paints each theme's background once at startup, the theme on screen first, which makes switching instant:
   - `dusk.rs` bakes the wallpaper, the white card and its shadow, the frosted glass widgets and the settings panel's plate.
-  - `berlin.rs` shades the market art (`ui/assets/berlin-market.png`) so the text over it stays legible.
+  - `seoul.rs` shades the persimmon-tree art (`ui/assets/seoul-persimmon.png`) so the text over it stays legible.
 
   On the Pi, Dusk takes about 3 s and bitcoin++ about 1 s.
-- **Files:** `ui/dusk.slint` and `ui/berlin.slint` each hold a theme's screens and settings panel. They share `ui/state.slint` and `ui/common.slint` (formatting, trivia, QR codes, the gear), and `ui/faucet.slint` is the window that picks between them.
+- **Files:** `ui/dusk.slint` and `ui/seoul.slint` each hold a theme's screens and settings panel. They share `ui/state.slint` and `ui/common.slint` (formatting, trivia, QR codes, the gear), and `ui/faucet.slint` is the window that picks between them.
 - **QR codes:** rendered in Rust at their exact on-screen size, as ink modules on a transparent field, and drawn 1:1. Slint's software renderer drops rows and columns when it scales an image by a non-integer factor.
 
 **Licences:**
-- Inter, IBM Plex and Source Serif 4 are under the SIL Open Font License, and Ubuntu is under the Ubuntu Font Licence; see `ui/fonts/licenses/`.
+- Inter, IBM Plex (including Plex Sans KR) and Source Serif 4 are under the SIL Open Font License, and Ubuntu is under the Ubuntu Font Licence; see `ui/fonts/licenses/`.
 - The bitcoin++ name, wordmark, sparkles and artwork belong to bitcoin++. Get the organisers' OK before showing that theme at their event.
 
 ## Build

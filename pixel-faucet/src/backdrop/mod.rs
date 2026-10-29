@@ -5,9 +5,9 @@
 //! and solid shapes on top. Both themes are painted at startup (the active one first), so
 //! switching themes is instant.
 //! - [`dusk`]: a procedural sunset with the QR card, glass widgets and shadows baked in
-//! - [`berlin`]: the bitcoin++ Berlin market art, shaded so the text over it stays legible
+//! - [`seoul`]: the bitcoin++ Seoul persimmon-tree art, shaded dark so the text over it stays legible
 
-pub mod berlin;
+pub mod seoul;
 pub mod dusk;
 
 use slint::{Rgb8Pixel, SharedPixelBuffer};
@@ -266,10 +266,6 @@ impl Canvas {
         Ok(Canvas { w: info.width as usize, h: info.height as usize, px })
     }
 
-    /// Like `map`, with each pixel's row
-    pub(super) fn map_rows(&self, f: impl Fn(usize, Rgb) -> Rgb) -> Canvas {
-        Canvas { w: self.w, h: self.h, px: self.px.iter().enumerate().map(|(i, &c)| f(i / self.w, c)).collect() }
-    }
 }
 
 pub(super) fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {

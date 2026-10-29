@@ -1,7 +1,7 @@
 // Shared by both themes: geometry Rust reads, number formatting, trivia, QR codes, the
 // settings gear, and closing the settings panel.
 
-import { Faucet, MintStep } from "state.slint";
+import { Faucet, MintStep, Theme } from "state.slint";
 
 export global Layout {
     out property <length> screen: 720px;
@@ -56,16 +56,43 @@ export global Trivia {
         "Wallets can ask a mint whether a token has been spent (NUT-07). That's how this faucet knew you'd claimed yours.",
         "This faucet is a Raspberry Pi Zero 2 W running CDK, the Cashu Development Kit, written in Rust.",
     ];
+    // The same facts in Korean, in the same order, for the Seoul theme. Rust joins each
+    // word's syllables at startup so lines break at spaces only.
+    in-out property <[string]> facts-ko: [
+        "데이비드 차움은 1982년에 블라인드 서명을 발명했어요. 이캐시의 프라이버시를 지켜 주는 암호 기술이에요.",
+        "차움은 먹지를 댄 봉투로 블라인드 서명을 설명했어요. 안에 든 편지를 읽지 않고도 서명할 수 있죠.",
+        "차움의 회사 디지캐시는 이캐시를 실제 은행에 들여왔어요. 1995년부터 세인트루이스의 마크 트웨인 은행 고객들은 달러를 이캐시로 온라인에서 프라이빗하게 쓸 수 있었죠.",
+        "디지캐시는 비트코인보다 10년 앞선 1998년에 파산했어요. 하지만 프라이빗한 디지털 현금이라는 아이디어는 살아남았어요.",
+        "1996년 데이비드 와그너는 차움의 방식을 디피-헬먼 키에 맞게 바꿨어요. Cashu는 와그너의 방식을 바탕으로 만들어졌어요.",
+        "1988년 차움, 피아트, 나오르는 이캐시를 오프라인에서도 쓸 수 있게 만들었어요. 같은 코인을 두 번 쓰면 수학이 누가 썼는지 밝혀내요.",
+        "Cashu는 2022년에 시작됐어요.",
+        "Cashu의 사양은 NUT라고 불러요. Notation, Usage and Terminology(표기법, 사용법, 용어)의 약자예요.",
+        "민트는 토큰을 보지 않고 서명해요. 그래서 토큰이 돌아와도 누구 것이었는지 알 수 없어요.",
+        "이캐시는 무기명 자산이에요. 지폐처럼 토큰을 가진 사람이 sats의 주인이에요.",
+        "이캐시를 뒷받침하는 비트코인은 민트가 보관해요. 그러니 이캐시는 민트만큼만 믿을 수 있어요. 지갑 속 현금처럼 적은 금액만 두세요.",
+        "Cashu 토큰은 동전처럼 2의 거듭제곱 단위로 나뉘어요. 21 sats는 16, 4, 1로 전달돼요.",
+        "민트는 라이트닝으로 비트코인을 주고받아요. 인보이스를 결제하면 이캐시가 발행되고, 이캐시를 녹이면(melt) 인보이스가 결제돼요.",
+        "Cashu 토큰은 그냥 텍스트예요. QR 코드나 채팅 메시지, NFC로 보내거나 종이에 인쇄할 수도 있어요.",
+        "토큰을 공개 키에 잠글 수 있어요(NUT-11). 그러면 짝이 맞는 개인 키를 가진 사람만 받을 수 있어요.",
+        "움직이는 QR 코드(NUT-16)는 토큰을 여러 프레임으로 나눠요. 그래서 큰 토큰도 작은 화면에 담을 수 있어요.",
+        "지갑은 토큰이 사용됐는지 민트에 물어볼 수 있어요(NUT-07). 이 파우셋도 그렇게 해서 여러분이 토큰을 받은 걸 알았어요.",
+        "이 파우셋은 라즈베리 파이 제로 2 W에서 돌아가요. Rust로 작성된 Cashu 개발 키트, CDK를 써요.",
+    ];
     // The order the facts appear in. Rust shuffles it at startup and again after every
     // round; until then (and in snapshots) they go in list order.
     in property <[int]> order;
     // Every fact has been shown once
     callback round-done();
-    // Moves on every 8 seconds of pause, picking up where it left off after the next claim
+    // Quarter-second ticks of pause, picking up where they left off after the next claim
     in-out property <int> ticks;
-    property <int> slot: Math.mod(Math.floor(self.ticks / 32), self.facts.length);
+    // Ticks per fact: 8 seconds, or 16 in the Seoul theme, which shows each fact in English
+    // and then in Korean
+    out property <int> period: Faucet.theme == Theme.seoul ? 64 : 32;
+    property <int> slot: Math.mod(Math.floor(self.ticks / self.period), self.facts.length);
     out property <int> index: self.order.length == self.facts.length ? self.order[self.slot] : self.slot;
-    // Fades out for the last quarter-second before the next fact
+    // Seoul: the second 8 seconds of each fact are in Korean
+    out property <bool> korean: Math.mod(self.ticks, self.period) >= 32;
+    // Fades out for the last quarter-second before the next fact (or language)
     out property <bool> fading: Math.mod(self.ticks, 32) == 31;
 }
 
