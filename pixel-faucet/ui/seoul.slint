@@ -204,7 +204,6 @@ component Ticker inherits Rectangle {
     height: SeoulLayout.ticker-h;
     background: Btc.chrome;
     HorizontalLayout {
-        alignment: start;
         Rectangle {
             width: mark.width + 40px;
             mark := Wordmark {
@@ -218,27 +217,12 @@ component Ticker inherits Rectangle {
         }
         HorizontalLayout {
             padding-left: 20px;
-            spacing: 16px;
             Label {
                 text: "SEOUL, PRIVACY EDITION";
                 font-size: 16px;
                 font-weight: 700;
                 letter-spacing: 2px;
                 color: Btc.accent;
-                vertical-alignment: center;
-            }
-            Label {
-                text: "•";
-                font-size: 16px;
-                color: Btc.ticker-soft;
-                vertical-alignment: center;
-            }
-            Label {
-                text: "NOV 5 - 6, 2026";
-                font-size: 16px;
-                font-weight: 500;
-                letter-spacing: 2px;
-                color: Btc.paper;
                 vertical-alignment: center;
             }
         }
@@ -843,7 +827,7 @@ component OwnerSheet inherits Rectangle {
         width: parent.width - 64px;
         height: 6 * 76px;
         SettingRow {
-            title: "§01 · DRIP";
+            title: "01 · DRIP";
             note: "sats per claim";
             for amount in [8, 16, 21, 32, 64, 100]: Button {
                 horizontal-stretch: 1;
@@ -854,7 +838,7 @@ component OwnerSheet inherits Rectangle {
             }
         }
         SettingRow {
-            title: "§02 · PAUSE";
+            title: "02 · PAUSE";
             note: "between claims";
             for option in [
                 { secs: 0, label: "OFF" },
@@ -870,7 +854,7 @@ component OwnerSheet inherits Rectangle {
             }
         }
         SettingRow {
-            title: "§03 · QR";
+            title: "03 · QR";
             note: Faucet.animated-qr ? "NUT-16 wallets" : "every wallet";
             Button {
                 horizontal-stretch: 1;
@@ -888,7 +872,7 @@ component OwnerSheet inherits Rectangle {
             }
         }
         SettingRow {
-            title: "§04 · THEME";
+            title: "04 · THEME";
             note: "look and feel";
             Button {
                 horizontal-stretch: 1;
@@ -905,7 +889,7 @@ component OwnerSheet inherits Rectangle {
             }
         }
         SettingRow {
-            title: "§05 · MINT";
+            title: "05 · MINT";
             note: "where sats live";
             Button {
                 horizontal-stretch: 1;
@@ -915,7 +899,7 @@ component OwnerSheet inherits Rectangle {
             }
         }
         SettingRow {
-            title: "§06 · REFILL";
+            title: "06 · REFILL";
             note: "sats, via Lightning";
             for amount in [1000, 5000, 21000]: Button {
                 horizontal-stretch: 1;
