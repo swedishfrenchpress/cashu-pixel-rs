@@ -390,13 +390,7 @@ component Desk inherits Rectangle {
                 x: 36px;
                 y: 36px;
                 height: 28px;
-                spacing: 10px;
                 alignment: start;
-                Label {
-                    text: "§\{Fmt.pad2(Trivia.index + 1)} ·";
-                    color: #090909;
-                    vertical-alignment: center;
-                }
                 if !Trivia.korean: Label {
                     text: "DID YOU KNOW?";
                     color: #090909;
@@ -450,7 +444,7 @@ component Desk inherits Rectangle {
             }
             Label {
                 y: 322px;
-                text: root.claimed ? "CLAIMED →" : "REFILLED · THANK YOU";
+                text: root.claimed ? "CLAIMED" : "REFILLED · THANK YOU";
                 color: Btc.muted;
                 horizontal-alignment: center;
             }
@@ -744,7 +738,7 @@ component MintPanel inherits Rectangle {
             Button {
                 horizontal-stretch: 1;
                 selected: true;
-                text: Faucet.mint-movable > 0 ? "MOVE AND SWITCH →" : "SWITCH →";
+                text: Faucet.mint-movable > 0 ? "MOVE AND SWITCH" : "SWITCH";
                 font-size: 17px;
                 clicked => {
                     Faucet.mint-step = MintStep.moving;
@@ -786,7 +780,7 @@ component MintPanel inherits Rectangle {
             y: 592px;
             width: 300px;
             selected: true;
-            text: "DONE →";
+            text: "DONE";
             clicked => { Settings.close-mints(); }
         }
         if Faucet.mint-step == MintStep.failed: HorizontalLayout {
@@ -915,7 +909,7 @@ component OwnerSheet inherits Rectangle {
             note: "where sats live";
             Button {
                 horizontal-stretch: 1;
-                text: "\{Faucet.mint-host} →";
+                text: Faucet.mint-host;
                 font-size: 17px;
                 clicked => { Settings.open-mints(); }
             }
@@ -966,7 +960,7 @@ component OwnerSheet inherits Rectangle {
         Button {
             horizontal-stretch: 1;
             dark: true;
-            text: "EXIT TO DESKTOP →";
+            text: "EXIT TO DESKTOP";
             font-size: 17px;
             clicked => { Faucet.exit-app(); }
         }
@@ -1037,7 +1031,7 @@ component OwnerSheet inherits Rectangle {
             y: 592px;
             width: 300px;
             selected: refill.paid;
-            text: refill.paid ? "DONE →" : "CANCEL";
+            text: refill.paid ? "DONE" : "CANCEL";
             clicked => {
                 Faucet.refill-view = false;
                 Faucet.close-refill();
